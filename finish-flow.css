@@ -449,6 +449,61 @@ textarea:focus {
     display: none !important;
   }
 }
+/* ============================================
+   ENHANCED AUTO-ADVANCE FEEDBACK
+   ============================================ */
+
+/* Instant hover feedback */
+.finish-flow-hover {
+  background-color: #f5f5f5 !important;
+  transform: scale(1.02);
+  transition: all 0.1s ease !important; /* Sehr schnell! */
+}
+
+/* Instant selection feedback */
+.finish-flow-selected {
+  background-color: #e8f5e9 !important;
+  border-color: #4CAF50 !important;
+  transform: scale(1.03);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important; /* Smooth aber schnell */
+}
+
+/* Radio button checked state - instant */
+[data-auto-advance] input[type="radio"]:checked ~ *,
+input[type="radio"][data-auto-advance]:checked ~ * {
+  transition: all 0.1s ease !important;
+}
+
+/* Optimized transitions for auto-advance */
+[data-auto-advance="true"] label,
+input[type="radio"][data-auto-advance] + label {
+  will-change: transform, background-color; /* Browser optimization */
+  transition: transform 0.1s ease, background-color 0.1s ease !important;
+}
+
+/* Loading state während transition */
+.finish-flow-advancing {
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+/* Smooth step transitions - aber schneller */
+[data-form-step] {
+  animation-duration: 0.25s !important; /* Schneller als 0.3s */
+}
+
+@keyframes finishFlowFadeInFast {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 
 /* ============================================
    DARK MODE SUPPORT (Optional)
