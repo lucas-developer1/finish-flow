@@ -85,13 +85,17 @@ class FinishFlow {
         this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
       
-      // Focus first input in new step
-      const firstInput = step.querySelector('input, select, textarea');
-      if (firstInput && firstInput.type !== 'hidden') {
-        setTimeout(() => firstInput.focus(), 100);
-      }
+         // Focus first input in new step
+    const firstInput = step.querySelector('input, select, textarea');
+    if (firstInput && firstInput.type !== 'hidden') {
+      setTimeout(() => firstInput.focus(), 100);
     }
+    
+    // Preload next step für bessere Performance  
+    this.preloadNextStep();                   
   }
+}
+
   
   nextStep() {
     if (this.validateCurrentStep()) {
@@ -111,6 +115,37 @@ class FinishFlow {
       this.showStep(this.currentStep - 1);
     }
   }
+  preloadNextStep() {
+  // Preload images/content vom nächsten Step für schnellere Transitions
+  if (this.currentStep < this.steps.length - 1) {
+    const nextStep = this.steps[this.currentStep + 1];
+    
+    // Preload images
+    const images = nextStep.querySelectorAll('img');
+    images.forEach(img => {
+      if (!img.complete) {
+        img.loading = 'eager';
+        // Trigger image load
+        const src = img.src;
+        if (src) {
+          const preloadImg = new Image();
+          preloadImg.src = src;
+        }
+      }
+    });
+    
+    // Preload background images
+    const elementsWithBg = nextStep.querySelectorAll('[style*="background-image"]');
+    elementsWithBg.forEach(el => {
+      const bgUrl = el.style.backgroundImage.match(/url\(['"]?([^'"]+)['"]?\)/);
+      if (bgUrl && bgUrl[1]) {
+        const preloadImg = new Image();
+        preloadImg.src = bgUrl[1];
+      }
+    });
+  }
+}
+
   
   showSubmitButton() {
     const submitBtn = this.form.querySelector('[type="submit"]');
