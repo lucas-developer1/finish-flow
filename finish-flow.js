@@ -120,61 +120,108 @@ class FinishFlow {
     }
   }
   
-  setupAutoAdvance() {
-    // Auto-advance für Div-Container mit Radio Buttons
-    const autoAdvanceGroups = this.form.querySelectorAll('[data-auto-advance="true"]');
+setupAutoAdvance() {
+  // Auto-advance für Div-Container mit Radio Buttons
+  const autoAdvanceGroups = this.form.querySelectorAll('[data-auto-advance="true"]');
+  
+  autoAdvanceGroups.forEach(group => {
+    const radioButtons = group.querySelectorAll('input[type="radio"]');
     
-    autoAdvanceGroups.forEach(group => {
-      const radioButtons = group.querySelectorAll('input[type="radio"]');
-      
-      radioButtons.forEach(radio => {
-        radio.addEventListener('change', () => {
-          setTimeout(() => {
-            this.captureStepData();
-            this.evaluateConditionals();
-            this.nextStep();
-          }, 300);
-        });
-      });
-    });
-    
-    // Auto-advance für einzelne Radio-Button-Gruppen per name
-    const radioGroups = this.form.querySelectorAll('input[type="radio"][data-auto-advance]');
-    const processedGroups = new Set();
-    
-    radioGroups.forEach(radio => {
-      const groupName = radio.name;
-      
-      if (!processedGroups.has(groupName)) {
-        processedGroups.add(groupName);
+    radioButtons.forEach(radio => {
+      // Sofortiges visuelles Feedback
+      radio.addEventListener('change', () => {
+        // Markiere Selection visuell SOFORT
+        const label = radio.closest('label') || radio.parentElement;
+        if (label) {
+          label.classList.add('finish-flow-selected');
+        }
         
-        const allRadiosInGroup = this.form.querySelectorAll(`input[type="radio"][name="${groupName}"]`);
-        
-        allRadiosInGroup.forEach(r => {
-          r.addEventListener('change', () => {
-            setTimeout(() => {
-              this.captureStepData();
-              this.evaluateConditionals();
-              this.nextStep();
-            }, 300);
-          });
-        });
-      }
-    });
-    
-    // Auto-advance für Select Dropdowns
-    const autoAdvanceSelects = this.form.querySelectorAll('select[data-auto-advance]');
-    
-    autoAdvanceSelects.forEach(select => {
-      select.addEventListener('change', () => {
+        // Capture data und advance mit minimalem Delay
         setTimeout(() => {
           this.captureStepData();
           this.evaluateConditionals();
           this.nextStep();
-        }, 400);
+        }, 100); // Reduziert von 300ms auf 100ms!
       });
+      
+      // Hover-Effekt für besseres Feedback
+      const label = radio.closest('label') || radio.parentElement;
+      if (label) {
+        label.addEventListener('mouseenter', () => {
+          label.classList.add('finish-flow-hover');
+        });
+        label.addEventListener('mouseleave', () => {
+          label.classList.remove('finish-flow-hover');
+        });
+      }
     });
-  }
+  });
+  
+  // Auto-advance für einzelne Radio-Button-Gruppen per name
+  const radioGroups = this.form.querySelectorAll('input[type="radio"][data-auto-advance]');
+  const processedGroups = new Set();
+  
+  radioGroups.forEach(radio => {
+    const groupName = radio.name;
+    
+    if (!processedGroups.has(groupName)) {
+      processedGroups.add(groupName);
+      
+      const allRadiosInGroup = this.form.querySelectorAll(`input[type="radio"][name="${groupName}"]`);
+      
+      allRadiosInGroup.forEach(r => {
+        // Sofortiges visuelles Feedback
+        r.addEventListener('change', () => {
+          // Remove selected class from all in group
+          allRadiosInGroup.forEach(otherRadio => {
+            const otherLabel = otherRadio.closest('label') || otherRadio.parentElement;
+            if (otherLabel) {
+              otherLabel.classList.remove('finish-flow-selected');
+            }
+          });
+          
+          // Add selected class to clicked one
+          const label = r.closest('label') || r.parentElement;
+          if (label) {
+            label.classList.add('finish-flow-selected');
+          }
+          
+          // Advance mit minimalem Delay
+          setTimeout(() => {
+            this.captureStepData();
+            this.evaluateConditionals();
+            this.nextStep();
+          }, 100); // Schneller!
+        });
+        
+        // Hover-Effekt
+        const label = r.closest('label') || r.parentElement;
+        if (label) {
+          label.addEventListener('mouseenter', () => {
+            label.classList.add('finish-flow-hover');
+          });
+          label.addEventListener('mouseleave', () => {
+            label.classList.remove('finish-flow-hover');
+          });
+        }
+      });
+    }
+  });
+  
+  // Auto-advance für Select Dropdowns
+  const autoAdvanceSelects = this.form.querySelectorAll('select[data-auto-advance]');
+  
+  autoAdvanceSelects.forEach(select => {
+    select.addEventListener('change', () => {
+      setTimeout(() => {
+        this.captureStepData();
+        this.evaluateConditionals();
+        this.nextStep();
+      }, 150); // Etwas länger für Selects
+    });
+  });
+}
+
   
   evaluateConditionals() {
     // Show-if Logik
