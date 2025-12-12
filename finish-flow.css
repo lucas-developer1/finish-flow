@@ -1,46 +1,51 @@
 /**
- * Finish Flow - Smart Multi-Step Form System for Webflow
- * Version: 1.0.0
- * Styles & Animations
+ * Finish Flow v2.0.0 - Minimal CSS
+ * FOUC Prevention + Visual Feedback + Error States
  */
 
 /* ============================================
-   FOUC PREVENTION (Flash of Unstyled Content)
+   1. FOUC PREVENTION (CRITICAL!)
    ============================================ */
 
-/* Hide all steps initially before JS loads */
+/* Hide all steps by default BEFORE JavaScript loads */
 [data-form-step] {
-  display: none;
+  display: none !important;
 }
 
-/* Show only first step by default */
+/* Show first step immediately */
 [data-form-step]:first-child {
-  display: block;
+  display: block !important;
 }
 
-/* After JS initialization, control via classes */
+/* After JS initialization, let JavaScript control visibility */
 .finish-flow-initialized [data-form-step] {
-  display: none;
+  display: none !important;
 }
 
-.finish-flow-initialized [data-form-step].active {
-  display: block;
+.finish-flow-initialized [data-form-step][style*="display: block"] {
+  display: block !important;
 }
 
+/* Conditional steps - hidden by default */
 [data-show-if],
 [data-hide-if] {
-  display: none;
+  display: none !important;
 }
 
+/* When JS sets display: block, show them */
+[data-show-if][style*="display: block"],
+[data-hide-if][style*="display: block"] {
+  display: block !important;
+}
 
 /* ============================================
-   ANIMATIONS
+   2. ANIMATIONS (Smooth Transitions)
    ============================================ */
 
 @keyframes finishFlowFadeIn {
   from {
     opacity: 0;
-    transform: translateY(15px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -54,20 +59,51 @@
   20%, 40%, 60%, 80% { transform: translateX(5px); }
 }
 
-@keyframes finishFlowPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-/* Smooth transitions for all form elements */
+/* Apply fade-in to steps */
 [data-form-step] {
-  animation-duration: 0.3s;
+  animation-duration: 0.25s;
   animation-timing-function: ease-in-out;
   animation-fill-mode: both;
 }
 
 /* ============================================
-   ERROR STATES
+   3. AUTO-ADVANCE VISUAL FEEDBACK
+   ============================================ */
+
+/* Hover effect for radio button containers */
+[data-auto-advance] label,
+input[type="radio"][data-auto-advance] + label,
+[data-auto-advance] input[type="radio"] + label {
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 12px 16px;
+  border-radius: 8px;
+  display: block;
+  margin: 8px 0;
+}
+
+[data-auto-advance] label:hover,
+input[type="radio"][data-auto-advance] + label:hover,
+[data-auto-advance] input[type="radio"] + label:hover {
+  background-color: #f5f5f5;
+  transform: translateX(3px);
+}
+
+/* Selected state (added by JavaScript) */
+.finish-flow-selected {
+  background-color: #e8f5e9 !important;
+  border: 2px solid #4CAF50 !important;
+  font-weight: 600;
+  transform: translateX(0) !important;
+}
+
+/* Hover state (added by JavaScript) */
+.finish-flow-hover {
+  background-color: #f5f5f5;
+}
+
+/* ============================================
+   4. ERROR STATES
    ============================================ */
 
 /* Error styling for inputs */
@@ -76,12 +112,12 @@ select.finish-flow-error,
 textarea.finish-flow-error {
   border-color: #ff4444 !important;
   background-color: #fff5f5 !important;
-  animation: finishFlowShake 0.5s;
+  animation: finishFlowShake 0.4s;
 }
 
-/* Error styling for labels/containers */
+/* Error styling for containers (radio/checkbox groups) */
 .finish-flow-error {
-  animation: finishFlowShake 0.5s;
+  animation: finishFlowShake 0.4s;
 }
 
 .finish-flow-error label {
@@ -107,33 +143,22 @@ textarea.finish-flow-error {
 }
 
 /* ============================================
-   PROGRESS INDICATORS
+   5. PROGRESS BAR (Optional Styling)
    ============================================ */
 
-/* Progress Bar */
+/* Progress Bar Container */
 [data-progress-bar] {
   height: 4px;
   background-color: #e0e0e0;
   border-radius: 2px;
-  overflow: hidden;
   position: relative;
-}
-
-[data-progress-bar]::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+  overflow: hidden;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Progress Bar Container */
-.finish-flow-progress-container {
-  width: 100%;
-  margin-bottom: 24px;
+/* Progress Bar Fill (controlled by JS via width style) */
+[data-progress-bar] {
+  background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
 }
 
 /* Step Indicator Text */
@@ -173,13 +198,8 @@ textarea.finish-flow-error {
   color: white;
 }
 
-[data-step-number].completed::after {
-  content: "✓";
-  font-size: 16px;
-}
-
 /* ============================================
-   BUTTONS
+   6. BUTTONS (Optional Styling)
    ============================================ */
 
 /* Next & Previous Buttons */
@@ -193,7 +213,7 @@ textarea.finish-flow-error {
 [data-next-button]:hover,
 [data-prev-button]:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 0.9;
 }
 
 [data-next-button]:active,
@@ -201,113 +221,48 @@ textarea.finish-flow-error {
   transform: translateY(0);
 }
 
-[data-next-button]:disabled,
-[data-prev-button]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* Submit Button - hidden by default */
+/* Submit Button - hidden by default until last step */
 [data-finish-flow] [type="submit"] {
   display: none;
-  animation: finishFlowFadeIn 0.4s;
 }
 
 /* ============================================
-   AUTO-ADVANCE ELEMENTS
+   7. RESPONSIVE DESIGN
    ============================================ */
 
-/* Radio buttons with auto-advance get a pointer cursor */
-[data-auto-advance] input[type="radio"],
-input[type="radio"][data-auto-advance] {
-  cursor: pointer;
+@media (max-width: 768px) {
+  [data-auto-advance] label,
+  input[type="radio"][data-auto-advance] + label {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  
+  [data-step-number] {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  [data-error-message] {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
 }
 
-/* Hover effect for auto-advance radio labels */
-[data-auto-advance] label,
-input[type="radio"][data-auto-advance] + label {
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 12px 16px;
-  border-radius: 8px;
-  display: block;
-  margin: 8px 0;
-}
-
-[data-auto-advance] label:hover,
-input[type="radio"][data-auto-advance] + label:hover {
-  background-color: #f5f5f5;
-  transform: translateX(4px);
-}
-
-/* Selected state for auto-advance radios */
-[data-auto-advance] input[type="radio"]:checked + label,
-input[type="radio"][data-auto-advance]:checked + label {
-  background-color: #e8f5e9;
-  border: 2px solid #4CAF50;
-  font-weight: 600;
-  animation: finishFlowPulse 0.3s;
-}
-
-/* Select dropdowns with auto-advance */
-select[data-auto-advance] {
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-select[data-auto-advance]:focus {
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+@media (max-width: 480px) {
+  [data-step-indicator] {
+    font-size: 12px;
+  }
+  
+  [data-step-number] {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+  }
 }
 
 /* ============================================
-   CONDITIONAL ELEMENTS
-   ============================================ */
-
-/* Smooth transition for show/hide conditions */
-[data-show-if],
-[data-hide-if] {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-[data-show-if][style*="display: none"],
-[data-hide-if][style*="display: none"] {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* ============================================
-   LOADING STATES
-   ============================================ */
-
-.finish-flow-loading {
-  opacity: 0.6;
-  pointer-events: none;
-  position: relative;
-}
-
-.finish-flow-loading::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 24px;
-  height: 24px;
-  margin: -12px 0 0 -12px;
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #4CAF50;
-  border-radius: 50%;
-  animation: finishFlowSpin 0.8s linear infinite;
-}
-
-@keyframes finishFlowSpin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ============================================
-   ACCESSIBILITY
+   8. ACCESSIBILITY
    ============================================ */
 
 /* Focus states for keyboard navigation */
@@ -334,92 +289,24 @@ textarea:focus {
 }
 
 /* ============================================
-   RESPONSIVE DESIGN
+   9. UTILITY CLASSES
    ============================================ */
 
-@media (max-width: 768px) {
-  [data-form-step] {
-    padding: 16px 0;
-  }
-  
-  [data-step-number] {
-    width: 28px;
-    height: 28px;
-    font-size: 12px;
-    margin: 0 2px;
-  }
-  
-  [data-error-message] {
-    font-size: 13px;
-    padding: 10px 12px;
-  }
-  
-  [data-auto-advance] label,
-  input[type="radio"][data-auto-advance] + label {
-    padding: 10px 12px;
-    font-size: 14px;
-  }
-}
-
-@media (max-width: 480px) {
-  [data-step-indicator] {
-    font-size: 12px;
-  }
-  
-  [data-step-number] {
-    width: 24px;
-    height: 24px;
-    font-size: 11px;
-  }
-}
-
-/* ============================================
-   UTILITY CLASSES
-   ============================================ */
-
-/* Hide element */
 .finish-flow-hidden {
   display: none !important;
 }
 
-/* Fade in animation class */
-.finish-flow-fade-in {
-  animation: finishFlowFadeIn 0.4s ease-in;
-}
-
-/* Disabled state */
 .finish-flow-disabled {
   opacity: 0.5;
   pointer-events: none;
   cursor: not-allowed;
 }
 
-/* Success state */
-.finish-flow-success {
-  border-color: #4CAF50 !important;
-  background-color: #f1f8f4 !important;
-}
-
 /* ============================================
-   FORM CONTAINER
+   10. WEBFLOW SPECIFIC
    ============================================ */
 
-[data-finish-flow] {
-  position: relative;
-}
-
-/* Optional: Add this class to your form container for better spacing */
-.finish-flow-container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-/* ============================================
-   WEBFLOW SPECIFIC OVERRIDES
-   ============================================ */
-
-/* Ensure Webflow form success message works */
+/* Webflow form success/fail messages */
 [data-finish-flow] .w-form-done {
   display: none;
 }
@@ -437,116 +324,3 @@ textarea:focus {
   background-color: #fff5f5;
   border-radius: 6px;
 }
-
-/* ============================================
-   PRINT STYLES
-   ============================================ */
-
-@media print {
-  [data-form-step] {
-    display: block !important;
-    page-break-inside: avoid;
-  }
-  
-  [data-next-button],
-  [data-prev-button],
-  [data-progress-bar],
-  [data-step-number] {
-    display: none !important;
-  }
-}
-/* ============================================
-   ENHANCED AUTO-ADVANCE FEEDBACK
-   ============================================ */
-
-/* Instant hover feedback */
-.finish-flow-hover {
-  background-color: #f5f5f5 !important;
-  transform: scale(1.02);
-  transition: all 0.1s ease !important; /* Sehr schnell! */
-}
-
-/* Instant selection feedback */
-.finish-flow-selected {
-  background-color: #e8f5e9 !important;
-  border-color: #4CAF50 !important;
-  transform: scale(1.03);
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important; /* Smooth aber schnell */
-}
-
-/* Radio button checked state - instant */
-[data-auto-advance] input[type="radio"]:checked ~ *,
-input[type="radio"][data-auto-advance]:checked ~ * {
-  transition: all 0.1s ease !important;
-}
-
-/* Optimized transitions for auto-advance */
-[data-auto-advance="true"] label,
-input[type="radio"][data-auto-advance] + label {
-  will-change: transform, background-color; /* Browser optimization */
-  transition: transform 0.1s ease, background-color 0.1s ease !important;
-}
-
-/* Loading state während transition */
-.finish-flow-advancing {
-  pointer-events: none;
-  opacity: 0.95;
-}
-
-/* Smooth step transitions - aber schneller */
-[data-form-step] {
-  animation-duration: 0.25s !important; /* Schneller als 0.3s */
-}
-
-@keyframes finishFlowFadeInFast {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-
-/* ============================================
-   DARK MODE SUPPORT (Optional)
-   ============================================ */
-
-@media (prefers-color-scheme: dark) {
-  [data-error-message] {
-    background-color: #3a1f1f;
-    border-color: #5a3535;
-    color: #ff6b6b;
-  }
-  
-  input.finish-flow-error,
-  select.finish-flow-error,
-  textarea.finish-flow-error {
-    background-color: #3a1f1f !important;
-    border-color: #ff6b6b !important;
-  }
-  
-  [data-progress-bar] {
-    background-color: #333;
-  }
-  
-  [data-step-number] {
-    background-color: #444;
-    color: #ccc;
-  }
-  
-  [data-auto-advance] label:hover,
-  input[type="radio"][data-auto-advance] + label:hover {
-    background-color: #2a2a2a;
-  }
-  
-  [data-auto-advance] input[type="radio"]:checked + label,
-  input[type="radio"][data-auto-advance]:checked + label {
-    background-color: #1a3a1f;
-    border-color: #4CAF50;
-  }
-}
-
