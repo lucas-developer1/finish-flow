@@ -211,12 +211,32 @@ setupAutoAdvance() {
   // Auto-advance für Div-Container mit Radio Buttons
   const autoAdvanceGroups = this.form.querySelectorAll('[data-auto-advance="true"]');
   
+  if (this.options.debug) {
+    console.log('FinishFlow: setupAutoAdvance - Groups found:', autoAdvanceGroups.length);
+  }
+  
   autoAdvanceGroups.forEach(group => {
     const radioButtons = group.querySelectorAll('input[type="radio"]');
     
+    if (this.options.debug) {
+      console.log('FinishFlow: Auto-advance group has radios:', radioButtons.length);
+    }
+    
     radioButtons.forEach(radio => {
+      if (this.options.debug) {
+        console.log('FinishFlow: Adding listener to radio:', radio.name, radio.value);
+      }
+      
       // Sofortiges visuelles Feedback
-      radio.addEventListener('change', () => {
+      radio.addEventListener('change', (e) => {
+        if (this.options.debug) {
+          console.log('FinishFlow: Radio CHANGED!', {
+            name: radio.name,
+            value: radio.value,
+            checked: radio.checked
+          });
+        }
+        
         // Markiere Selection visuell SOFORT
         const label = radio.closest('label') || radio.parentElement;
         if (label) {
@@ -225,11 +245,25 @@ setupAutoAdvance() {
         
         // Capture data und advance mit minimalem Delay
         setTimeout(() => {
+          if (this.options.debug) {
+            console.log('FinishFlow: About to capture and advance...');
+          }
+          
           this.captureStepData();
+          
+          if (this.options.debug) {
+            console.log('FinishFlow: Data captured:', this.formData);
+          }
+          
           this.evaluateConditionals();
+          
+          if (this.options.debug) {
+            console.log('FinishFlow: Conditionals evaluated, calling nextStep()');
+          }
+          
           this.nextStep();
-        }, 100); // Reduziert von 300ms auf 100ms!
-      });
+        }, 100);
+      }, true); // useCapture = true
       
       // Hover-Effekt für besseres Feedback
       const label = radio.closest('label') || radio.parentElement;
@@ -248,6 +282,10 @@ setupAutoAdvance() {
   const radioGroups = this.form.querySelectorAll('input[type="radio"][data-auto-advance]');
   const processedGroups = new Set();
   
+  if (this.options.debug && radioGroups.length > 0) {
+    console.log('FinishFlow: Found individual auto-advance radios:', radioGroups.length);
+  }
+  
   radioGroups.forEach(radio => {
     const groupName = radio.name;
     
@@ -256,9 +294,17 @@ setupAutoAdvance() {
       
       const allRadiosInGroup = this.form.querySelectorAll(`input[type="radio"][name="${groupName}"]`);
       
+      if (this.options.debug) {
+        console.log('FinishFlow: Processing individual radio group:', groupName, 'count:', allRadiosInGroup.length);
+      }
+      
       allRadiosInGroup.forEach(r => {
         // Sofortiges visuelles Feedback
         r.addEventListener('change', () => {
+          if (this.options.debug) {
+            console.log('FinishFlow: Individual radio changed:', r.name, r.value);
+          }
+          
           // Remove selected class from all in group
           allRadiosInGroup.forEach(otherRadio => {
             const otherLabel = otherRadio.closest('label') || otherRadio.parentElement;
@@ -278,8 +324,8 @@ setupAutoAdvance() {
             this.captureStepData();
             this.evaluateConditionals();
             this.nextStep();
-          }, 100); // Schneller!
-        });
+          }, 100);
+        }, true);
         
         // Hover-Effekt
         const label = r.closest('label') || r.parentElement;
@@ -298,16 +344,29 @@ setupAutoAdvance() {
   // Auto-advance für Select Dropdowns
   const autoAdvanceSelects = this.form.querySelectorAll('select[data-auto-advance]');
   
+  if (this.options.debug && autoAdvanceSelects.length > 0) {
+    console.log('FinishFlow: Found auto-advance selects:', autoAdvanceSelects.length);
+  }
+  
   autoAdvanceSelects.forEach(select => {
     select.addEventListener('change', () => {
+      if (this.options.debug) {
+        console.log('FinishFlow: Select changed:', select.name, select.value);
+      }
+      
       setTimeout(() => {
         this.captureStepData();
         this.evaluateConditionals();
         this.nextStep();
-      }, 150); // Etwas länger für Selects
+      }, 150);
     });
   });
+  
+  if (this.options.debug) {
+    console.log('FinishFlow: setupAutoAdvance completed');
+  }
 }
+
 
   
   evaluateConditionals() {
