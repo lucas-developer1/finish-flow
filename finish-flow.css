@@ -1,6 +1,7 @@
 /**
- * Finish Flow v2.0.0 - Minimal CSS
- * FOUC Prevention + Visual Feedback + Error States
+ * Finish Flow v2.0.0 - Ultra Minimal CSS
+ * Only FOUC Prevention + Technical Necessities
+ * All visual styling happens in Webflow
  */
 
 /* ============================================
@@ -39,7 +40,7 @@
 }
 
 /* ============================================
-   2. ANIMATIONS (Smooth Transitions)
+   2. BASIC FADE-IN ANIMATION (Optional)
    ============================================ */
 
 @keyframes finishFlowFadeIn {
@@ -53,13 +54,7 @@
   }
 }
 
-@keyframes finishFlowShake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-
-/* Apply fade-in to steps */
+/* Apply fade-in to steps (can be overridden in Webflow) */
 [data-form-step] {
   animation-duration: 0.25s;
   animation-timing-function: ease-in-out;
@@ -67,159 +62,20 @@
 }
 
 /* ============================================
-   3. AUTO-ADVANCE VISUAL FEEDBACK
+   3. ERROR & SELECTION CLASSES (No Styling)
    ============================================ */
 
-/* Hover effect for radio button containers */
-[data-auto-advance] label,
-input[type="radio"][data-auto-advance] + label,
-[data-auto-advance] input[type="radio"] + label {
-  cursor: pointer;
-  transition: all 0.15s ease;
-  padding: 12px 16px;
-  border-radius: 8px;
-  display: block;
-  margin: 8px 0;
-}
-
-[data-auto-advance] label:hover,
-input[type="radio"][data-auto-advance] + label:hover,
-[data-auto-advance] input[type="radio"] + label:hover {
-  background-color: #f5f5f5;
-  transform: translateX(3px);
-}
-
-/* Selected state (added by JavaScript) */
-.finish-flow-selected {
-  background-color: #e8f5e9 !important;
-  border: 2px solid #4CAF50 !important;
-  font-weight: 600;
-  transform: translateX(0) !important;
-}
-
-/* Hover state (added by JavaScript) */
-.finish-flow-hover {
-  background-color: #f5f5f5;
-}
+/* These classes are added by JavaScript
+   Style them however you want in Webflow:
+   
+   .finish-flow-error - Added to invalid fields
+   .finish-flow-selected - Added to selected radio/checkbox
+   .finish-flow-hover - Added on hover (auto-advance elements)
+*/
 
 /* ============================================
-   4. ERROR STATES
+   4. SUBMIT BUTTON (Hidden until last step)
    ============================================ */
-
-/* Error styling for inputs */
-input.finish-flow-error,
-select.finish-flow-error,
-textarea.finish-flow-error {
-  border-color: #ff4444 !important;
-  background-color: #fff5f5 !important;
-  animation: finishFlowShake 0.4s;
-}
-
-/* Error styling for containers (radio/checkbox groups) */
-.finish-flow-error {
-  animation: finishFlowShake 0.4s;
-}
-
-.finish-flow-error label {
-  color: #ff4444 !important;
-}
-
-/* Error message element */
-[data-error-message] {
-  display: none;
-  color: #ff4444;
-  padding: 12px 16px;
-  margin: 16px 0;
-  background-color: #fff5f5;
-  border: 1px solid #ffcccc;
-  border-radius: 6px;
-  font-size: 14px;
-  animation: finishFlowFadeIn 0.3s;
-}
-
-[data-error-message]::before {
-  content: "⚠️ ";
-  margin-right: 8px;
-}
-
-/* ============================================
-   5. PROGRESS BAR (Optional Styling)
-   ============================================ */
-
-/* Progress Bar Container */
-[data-progress-bar] {
-  height: 4px;
-  background-color: #e0e0e0;
-  border-radius: 2px;
-  position: relative;
-  overflow: hidden;
-  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Progress Bar Fill (controlled by JS via width style) */
-[data-progress-bar] {
-  background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
-}
-
-/* Step Indicator Text */
-[data-step-indicator] {
-  display: inline-block;
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
-  font-weight: 500;
-}
-
-/* Step Numbers/Dots */
-[data-step-number] {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: #e0e0e0;
-  color: #666;
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 4px;
-  transition: all 0.3s ease;
-}
-
-[data-step-number].active {
-  background-color: #4CAF50;
-  color: white;
-  transform: scale(1.15);
-  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-}
-
-[data-step-number].completed {
-  background-color: #45a049;
-  color: white;
-}
-
-/* ============================================
-   6. BUTTONS (Optional Styling)
-   ============================================ */
-
-/* Next & Previous Buttons */
-[data-next-button],
-[data-prev-button] {
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-
-[data-next-button]:hover,
-[data-prev-button]:hover {
-  transform: translateY(-2px);
-  opacity: 0.9;
-}
-
-[data-next-button]:active,
-[data-prev-button]:active {
-  transform: translateY(0);
-}
 
 /* Submit Button - hidden by default until last step */
 [data-finish-flow] [type="submit"] {
@@ -227,55 +83,19 @@ textarea.finish-flow-error {
 }
 
 /* ============================================
-   7. RESPONSIVE DESIGN
+   5. ERROR MESSAGE ELEMENT
    ============================================ */
 
-@media (max-width: 768px) {
-  [data-auto-advance] label,
-  input[type="radio"][data-auto-advance] + label {
-    padding: 10px 12px;
-    font-size: 14px;
-  }
-  
-  [data-step-number] {
-    width: 28px;
-    height: 28px;
-    font-size: 12px;
-  }
-  
-  [data-error-message] {
-    font-size: 13px;
-    padding: 10px 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  [data-step-indicator] {
-    font-size: 12px;
-  }
-  
-  [data-step-number] {
-    width: 24px;
-    height: 24px;
-    font-size: 11px;
-  }
+/* Error message container - hidden by default */
+[data-error-message] {
+  display: none;
 }
 
 /* ============================================
-   8. ACCESSIBILITY
+   6. UTILITY CLASSES
    ============================================ */
 
-/* Focus states for keyboard navigation */
-[data-next-button]:focus,
-[data-prev-button]:focus,
-input:focus,
-select:focus,
-textarea:focus {
-  outline: 2px solid #4CAF50;
-  outline-offset: 2px;
-}
-
-/* Screen reader only content */
+/* Screen reader only content (accessibility) */
 .finish-flow-sr-only {
   position: absolute;
   width: 1px;
@@ -288,39 +108,6 @@ textarea:focus {
   border: 0;
 }
 
-/* ============================================
-   9. UTILITY CLASSES
-   ============================================ */
-
 .finish-flow-hidden {
   display: none !important;
-}
-
-.finish-flow-disabled {
-  opacity: 0.5;
-  pointer-events: none;
-  cursor: not-allowed;
-}
-
-/* ============================================
-   10. WEBFLOW SPECIFIC
-   ============================================ */
-
-/* Webflow form success/fail messages */
-[data-finish-flow] .w-form-done {
-  display: none;
-}
-
-[data-finish-flow].w-form-done .w-form-done {
-  display: block;
-  animation: finishFlowFadeIn 0.5s;
-}
-
-[data-finish-flow] .w-form-fail {
-  display: none;
-  color: #ff4444;
-  margin-top: 16px;
-  padding: 12px;
-  background-color: #fff5f5;
-  border-radius: 6px;
 }
