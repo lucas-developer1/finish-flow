@@ -1,468 +1,324 @@
 /**
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║                    FINISH FLOW v2.0.0                           ║
- * ║          Smart Multi-Step Form System for Webflow               ║
- * ║                                                                  ║
- * ║  Features:                                                       ║
- * ║  • Works with OR without Webflow Form element                   ║
- * ║  • Conditional Logic (show-if/hide-if)                          ║
- * ║  • Auto-Advance (Radio/Select)                                  ║
- * ║  • Progress Persistence                                         ║
- * ║  • Custom Submission Handling                                   ║
- * ║  • Robust & Production-Ready                                    ║
- * ║                                                                  ║
- * ║  License: MIT                                                    ║
- * ╚══════════════════════════════════════════════════════════════╝
+ * Finish Flow v2.0.0 - Smart Multi-Step Form System for Webflow
+ * Clean rebuild - stable, maintainable, performant
+ * Author: Your Name
+ * License: MIT
  */
 
-(function(window) {
-  'use strict';
-
-  /**
-   * Main FinishFlow Class
-   */
-  class FinishFlow {
-    constructor(selector, options = {}) {
-      // Find container (can be form or div)
-      this.container = typeof selector === 'string' 
-        ? document.querySelector(selector) 
-        : selector;
-
-      if (!this.container) {
-        console.error('[FinishFlow] Container not found:', selector);
-        return;
-      }
-
-      // Default options
-      this.options = {
-        // Core
-        debug: false,
-        animations: true,
-        
-        // Progress
-        saveProgress: true,
-        progressKey: null, // Auto-generated if null
-        progressExpiryHours: 24,
-        confirmRestore: true,
-        
-        // Submission
-        submissionMode: 'auto', // 'auto', 'webflow', 'webhook', 'custom'
-        webhookUrl: null,
-        webhookMethod: 'POST',
-        
-        // Callbacks
-        onInit: null,
-        onStepChange: null,
-        onSubmit: null,
-        onSubmitSuccess: null,
-        onSubmitError: null,
-        
-        ...options
-      };
-
-      // State
-      this.state = {
-        currentStepIndex: 0,
-        formData: {},
-        visibleSteps: [],
-        isSubmitting: false,
-        initialized: false
-      };
-
-      // Elements cache
-      this.elements = {
-        steps: [],
-        nextButtons: [],
-        prevButtons: [],
-        submitButtons: [],
-        progressBar: null,
-        stepIndicator: null,
-        stepNumbers: []
-      };
-
-      // Initialize
-      this.init();
-    }
-
-    /**
-     * ══════════════════════════════════════════════════════════
-     * INITIALIZATION
-     * ══════════════════════════════════════════════════════════
-     */
+class FinishFlow {
+  constructor(formSelector, options = {}) {
+    // Find form
+    this.form = document.querySelector(formSelector);
     
-    init() {
-      this.log('🚀 Initializing FinishFlow v2.0');
-      
-      // Detect submission mode
-      this.detectSubmissionMode();
-      
-      // Cache elements
-      this.cacheElements();
-      
-      // Validate setup
-      if (!this.validate()) {
-        return;
-      }
-      
-      // Setup
-      this.setupStorage();
-      this.setupEventListeners();
-      this.setupAutoAdvance();
-      
-      // Load saved progress
-      if (this.options.saveProgress) {
-        this.loadProgress();
-      }
-      
-      // Initial render
-      this.updateVisibility();
-      this.render();
-      
-      // Mark as initialized
-      this.state.initialized = true;
-      this.container.classList.add('ff-initialized');
-      
-      this.log('✅ FinishFlow initialized', {
-        steps: this.elements.steps.length,
-        mode: this.options.submissionMode
-      });
-      
-      // Callback
-      if (this.options.onInit) {
-        this.options.onInit(this);
-      }
+    if (!this.form) {
+      console.error('❌ FinishFlow: Form not found:', formSelector);
+      return;
     }
-
-    detectSubmissionMode() {
-      if (this.options.submissionMode !== 'auto') {
-        return; // User specified
+    
+    // Configuration
+    this.config = {
+      autoSaveDelay: 500,
+      autoAdvanceDelay: 100,
+      progressExpiry: 24,
+      confirmRestore: true,
+      saveProgress: true,
+      animations: true,
+      debug: false,
+      onSubmit: null,
+      ...options
+    };
+    
+    // State
+    this.state = {
+      currentStep: 0,
+      formData: {},
+      initialized: false
+    };
+    
+    // Cache elements
+    this.elements = {
+      steps: Array.from(this.form.querySelectorAll('[data-form-step]')),
+      nextButtons: this.form.querySelectorAll('[data-next-button]'),
+      prevButtons: this.form.querySelectorAll('[data-prev-button]'),
+      progressBar: this.form.querySelector('[data-progress-bar]'),
+      stepIndicator: this.form.querySelector('[data-step-indicator]'),
+      stepNumbers: this.form.querySelectorAll('[data-step-number]')
+    };
+    
+    // Storage key
+    this.storageKey = 'finish_flow_' + (this.form.id || 'form');
+    
+    // Submission mode detection
+    this.submissionMode = this.detectSubmissionMode();
+    
+    // Visible steps cache
+    this.visibleSteps = [];
+    
+    // Validation
+    if (this.elements.steps.length === 0) {
+      console.error('❌ FinishFlow: No steps found. Add [data-form-step] attributes.');
+      return;
+    }
+    
+    if (this.config.debug) {
+      console.log('🚀 FinishFlow v2.0 initialized:', {
+        formId: this.form.id,
+        steps: this.elements.steps.length,
+        mode: this.submissionMode,
+        config: this.config
+      });
+    }
+    
+    // Initialize
+    this.init();
+  }
+  
+  // ============================================
+  // 1. INITIALIZATION
+  // ============================================
+  
+  init() {
+    // Mark as initialized
+    this.form.classList.add('finish-flow-initialized');
+    
+    // Initial visibility update
+    this.updateVisibility();
+    
+    // Try to restore progress
+    const restored = this.loadProgress();
+    
+    // If not restored, start from step 0
+    if (!restored) {
+      this.state.currentStep = 0;
+    }
+    
+    // Setup
+    this.setupEventListeners();
+    this.setupAutoAdvance();
+    
+    // Initial render
+    this.render();
+    
+    // Mark as ready
+    this.state.initialized = true;
+    
+    if (this.config.debug) {
+      console.log('✅ FinishFlow ready. Starting at step:', this.state.currentStep);
+    }
+  }
+  
+  detectSubmissionMode() {
+    // Check if it's a Webflow form
+    if (this.form.hasAttribute('data-name') || this.form.classList.contains('w-form')) {
+      return 'webflow';
+    }
+    
+    // Check for webhook
+    if (this.form.hasAttribute('data-webhook-url')) {
+      return 'webhook';
+    }
+    
+    // Check for custom handler
+    if (this.config.onSubmit) {
+      return 'custom';
+    }
+    
+    return 'none';
+  }
+  
+  // ============================================
+  // 2. VISIBILITY & CONDITIONAL LOGIC
+  // ============================================
+  
+  updateVisibility() {
+    if (this.config.debug) {
+      console.log('🔍 Evaluating conditional visibility...');
+    }
+    
+    // Capture current form data
+    this.captureStepData();
+    
+    // Process all steps
+    this.elements.steps.forEach((step, index) => {
+      const showIf = step.getAttribute('data-show-if');
+      const hideIf = step.getAttribute('data-hide-if');
+      
+      let shouldShow = true;
+      
+      // Evaluate show-if
+      if (showIf) {
+        shouldShow = this.evaluateCondition(showIf);
+        
+        if (this.config.debug) {
+          console.log(`Step ${index}: show-if="${showIf}" → ${shouldShow}`);
+        }
       }
-
-      // Auto-detect
-      if (this.container.tagName === 'FORM') {
-        this.options.submissionMode = 'webflow';
-        this.log('📝 Detected: Webflow Form');
-      } else if (this.options.webhookUrl) {
-        this.options.submissionMode = 'webhook';
-        this.log('🔗 Detected: Webhook Mode');
+      
+      // Evaluate hide-if
+      if (hideIf && shouldShow) {
+        shouldShow = !this.evaluateCondition(hideIf);
+        
+        if (this.config.debug) {
+          console.log(`Step ${index}: hide-if="${hideIf}" → ${!shouldShow}`);
+        }
+      }
+      
+      // Apply visibility
+      if (shouldShow) {
+        step.removeAttribute('data-conditional-hidden');
       } else {
-        this.options.submissionMode = 'custom';
-        this.log('⚙️ Detected: Custom Mode');
+        step.setAttribute('data-conditional-hidden', 'true');
       }
-    }
-
-    cacheElements() {
-      // Steps
-      this.elements.steps = Array.from(
-        this.container.querySelectorAll('[data-form-step]')
-      );
-
-      // Buttons
-      this.elements.nextButtons = Array.from(
-        this.container.querySelectorAll('[data-next-button]')
-      );
+    });
+    
+    // Update visible steps cache
+    this.updateVisibleSteps();
+  }
+  
+  evaluateCondition(condition) {
+    // Support multiple conditions: "field1=value1,field2=value2"
+    const conditions = condition.split(',').map(c => c.trim());
+    
+    return conditions.every(cond => {
+      const [fieldName, expectedValue] = cond.split('=').map(s => s.trim());
+      const actualValue = String(this.state.formData[fieldName] || '');
       
-      this.elements.prevButtons = Array.from(
-        this.container.querySelectorAll('[data-prev-button]')
-      );
-
-      // Submit buttons (both types)
-      this.elements.submitButtons = Array.from(
-        this.container.querySelectorAll('[data-submit-button], [type="submit"]')
-      );
-
-      // UI Indicators
-      this.elements.progressBar = this.container.querySelector('[data-progress-bar]');
-      this.elements.stepIndicator = this.container.querySelector('[data-step-indicator]');
-      this.elements.stepNumbers = Array.from(
-        this.container.querySelectorAll('[data-step-number]')
-      );
-
-      this.log('📦 Elements cached', {
-        steps: this.elements.steps.length,
-        nextButtons: this.elements.nextButtons.length,
-        prevButtons: this.elements.prevButtons.length,
-        submitButtons: this.elements.submitButtons.length
-      });
+      return actualValue === expectedValue;
+    });
+  }
+  
+  updateVisibleSteps() {
+    this.visibleSteps = this.elements.steps.filter(step => {
+      return !step.hasAttribute('data-conditional-hidden');
+    });
+    
+    if (this.config.debug) {
+      console.log('👁️ Visible steps:', this.visibleSteps.length, '/', this.elements.steps.length);
     }
-
-    validate() {
-      if (this.elements.steps.length === 0) {
-        console.error('[FinishFlow] No steps found! Add [data-form-step] attributes.');
-        return false;
-      }
-
-      // Check step numbers
-      const stepNumbers = this.elements.steps.map(s => s.getAttribute('data-form-step'));
-      const uniqueNumbers = new Set(stepNumbers);
+  }
+  
+  // ============================================
+  // 3. DATA CAPTURE
+  // ============================================
+  
+  captureStepData() {
+    const inputs = this.form.querySelectorAll('input, select, textarea');
+    
+    inputs.forEach(input => {
+      if (!input.name) return;
       
-      if (stepNumbers.length !== uniqueNumbers.size) {
-        console.warn('[FinishFlow] Duplicate step numbers detected. This may cause issues.');
-      }
-
-      return true;
-    }
-
-    /**
-     * ══════════════════════════════════════════════════════════
-     * STATE MANAGEMENT
-     * ══════════════════════════════════════════════════════════
-     */
-
-    captureData() {
-      const currentStep = this.getCurrentStep();
-      if (!currentStep) return;
-
-      const inputs = currentStep.querySelectorAll('input, select, textarea');
-      
-      inputs.forEach(input => {
-        if (!input.name) return;
-
-        if (input.type === 'checkbox') {
-          this.state.formData[input.name] = input.checked;
-        } else if (input.type === 'radio') {
-          if (input.checked) {
-            this.state.formData[input.name] = input.value;
-          }
-        } else {
+      if (input.type === 'checkbox') {
+        this.state.formData[input.name] = input.checked;
+      } else if (input.type === 'radio') {
+        if (input.checked) {
           this.state.formData[input.name] = input.value;
         }
-      });
-
-      this.log('📊 Data captured', this.state.formData);
-    }
-
-    getAllData() {
-      // Capture current step data
-      this.captureData();
-      
-      // Return copy
-      return { ...this.state.formData };
-    }
-
-    /**
-     * ══════════════════════════════════════════════════════════
-     * VISIBILITY & CONDITIONAL LOGIC
-     * ══════════════════════════════════════════════════════════
-     */
-
-    updateVisibility() {
-      this.log('👁️ Updating visibility');
-
-      // Evaluate all conditional steps
-      this.elements.steps.forEach(step => {
-        const showIf = step.getAttribute('data-show-if');
-        const hideIf = step.getAttribute('data-hide-if');
-
-        let shouldShow = true;
-
-        // Check show-if
-        if (showIf) {
-          shouldShow = this.evaluateCondition(showIf);
-        }
-
-        // Check hide-if
-        if (hideIf && shouldShow) {
-          shouldShow = !this.evaluateCondition(hideIf);
-        }
-
-        // Apply visibility
-        if (shouldShow) {
-          step.removeAttribute('data-ff-hidden');
-        } else {
-          step.setAttribute('data-ff-hidden', 'true');
-        }
-      });
-
-      // Update visible steps list
-      this.state.visibleSteps = this.elements.steps.filter(
-        step => !step.hasAttribute('data-ff-hidden')
-      );
-
-      this.log('✅ Visible steps:', this.state.visibleSteps.length);
-    }
-
-    evaluateCondition(conditionString) {
-      const conditions = conditionString.split(',').map(c => c.trim());
-      
-      // AND logic (all must match)
-      return conditions.every(condition => {
-        const [fieldName, expectedValue] = condition.split('=').map(s => s.trim());
-        const actualValue = this.state.formData[fieldName];
-        
-        return String(actualValue) === String(expectedValue);
-      });
-    }
-
-    /**
-     * ══════════════════════════════════════════════════════════
-     * NAVIGATION
-     * ══════════════════════════════════════════════════════════
-     */
-
-    getCurrentStep() {
-      return this.state.visibleSteps[this.state.currentStepIndex] || null;
-    }
-
-    goToStep(index) {
-      if (index < 0 || index >= this.state.visibleSteps.length) {
-        this.log('❌ Invalid step index:', index);
-        return false;
+      } else {
+        this.state.formData[input.name] = input.value;
       }
-
-      this.log(`🎯 Going to step ${index}`);
-      
-      this.state.currentStepIndex = index;
+    });
+    
+    if (this.config.debug) {
+      console.log('📦 Form data captured:', this.state.formData);
+    }
+  }
+  
+  // ============================================
+  // 4. NAVIGATION
+  // ============================================
+  
+  nextStep() {
+    const currentStepElement = this.visibleSteps[this.state.currentStep];
+    
+    // Validate current step
+    if (!this.validateStep(currentStepElement)) {
+      if (this.config.debug) {
+        console.log('❌ Validation failed, staying on step', this.state.currentStep);
+      }
+      return;
+    }
+    
+    // Capture data
+    this.captureStepData();
+    
+    // Update visibility (in case conditions changed)
+    this.updateVisibility();
+    
+    // Find next visible step
+    if (this.state.currentStep < this.visibleSteps.length - 1) {
+      this.state.currentStep++;
       this.render();
+      this.saveProgress();
       
-      return true;
-    }
-
-    nextStep() {
-      this.log('➡️ Next step requested');
-
-      // Validate current step
-      if (!this.validateCurrentStep()) {
-        this.log('❌ Validation failed');
-        return false;
+      if (this.config.debug) {
+        console.log('➡️ Advanced to step', this.state.currentStep);
       }
-
-      // Capture data
-      this.captureData();
-
-      // Update visibility (conditionals may have changed)
-      this.updateVisibility();
-
-      // Check if there's a next step
-      const nextIndex = this.state.currentStepIndex + 1;
-
-      if (nextIndex < this.state.visibleSteps.length) {
-        this.goToStep(nextIndex);
-      } else {
-        this.log('🏁 Last step reached');
-        this.showSubmitButtons();
-      }
-
-      return true;
-    }
-
-    prevStep() {
-      this.log('⬅️ Previous step requested');
-
-      const prevIndex = this.state.currentStepIndex - 1;
-
-      if (prevIndex >= 0) {
-        this.goToStep(prevIndex);
-      } else {
-        this.log('⚠️ Already at first step');
-      }
-
-      return true;
-    }
-
-    /**
-     * ══════════════════════════════════════════════════════════
-     * RENDERING
-     * ══════════════════════════════════════════════════════════
-     */
-
-    render() {
-      this.log('🎨 Rendering');
-
-      // Hide all steps
-      this.elements.steps.forEach(step => {
-        step.style.display = 'none';
-      });
-
-      // Show current step
-      const currentStep = this.getCurrentStep();
-      if (currentStep) {
-        currentStep.style.display = 'block';
-
-        // Animation
-        if (this.options.animations) {
-          currentStep.style.animation = 'none';
-          setTimeout(() => {
-            currentStep.style.animation = 'ffFadeIn 0.3s ease';
-          }, 10);
-        }
-
-        // Scroll into view
-        if (this.state.currentStepIndex > 0) {
-          this.container.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'start' 
-          });
-        }
-
-        // Focus first input
-        const firstInput = currentStep.querySelector('input:not([type="hidden"]), select, textarea');
-        if (firstInput) {
-          setTimeout(() => firstInput.focus(), 100);
-        }
-      }
-
-      // Update UI
-      this.updateProgressIndicators();
-      this.hideSubmitButtons();
-
-      // Save progress
-      if (this.options.saveProgress) {
-        this.saveProgress();
-      }
-
-      // Callback
-      if (this.options.onStepChange) {
-        this.options.onStepChange(this.state.currentStepIndex, currentStep);
+    } else {
+      // Last step - show submit button
+      this.showSubmitButton();
+      
+      if (this.config.debug) {
+        console.log('✅ Reached last step');
       }
     }
-
-    updateProgressIndicators() {
-      const total = this.state.visibleSteps.length;
-      const current = this.state.currentStepIndex + 1;
-      const progress = (current / total) * 100;
-
-      // Progress bar
-      if (this.elements.progressBar) {
-        this.elements.progressBar.style.width = `${progress}%`;
+  }
+  
+  prevStep() {
+    if (this.state.currentStep > 0) {
+      this.state.currentStep--;
+      this.render();
+      this.saveProgress();
+      
+      if (this.config.debug) {
+        console.log('⬅️ Went back to step', this.state.currentStep);
       }
-
-      // Step indicator text
-      if (this.elements.stepIndicator) {
-        this.elements.stepIndicator.textContent = `Schritt ${current} von ${total}`;
+    }
+  }
+  
+  render() {
+    // Hide all steps
+    this.elements.steps.forEach(step => {
+      step.style.display = 'none';
+    });
+    
+    // Show current visible step
+    const currentStep = this.visibleSteps[this.state.currentStep];
+    
+    if (currentStep) {
+      currentStep.style.display = 'block';
+      
+      // Animation
+      if (this.config.animations) {
+        currentStep.style.animation = 'none';
+        setTimeout(() => {
+          currentStep.style.animation = 'finishFlowFadeIn 0.25s ease-in';
+        }, 10);
       }
-
-      // Step numbers
-      this.elements.stepNumbers.forEach((num, index) => {
-        num.classList.remove('active', 'completed');
-        
-        if (index === this.state.currentStepIndex) {
-          num.classList.add('active');
-        } else if (index < this.state.currentStepIndex) {
-          num.classList.add('completed');
-        }
-
-        // Hide if beyond visible steps
-        if (index >= total) {
-          num.style.display = 'none';
-        } else {
-          num.style.display = '';
-        }
-      });
+      
+      // Scroll to form top
+      if (this.state.currentStep > 0) {
+        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      
+      // Focus first input
+      const firstInput = currentStep.querySelector('input:not([type="hidden"]), select, textarea');
+      if (firstInput) {
+        setTimeout(() => firstInput.focus(), 100);
+      }
     }
-
-    showSubmitButtons() {
-      this.elements.submitButtons.forEach(btn => {
-        btn.style.display = '';
-      });
+    
+    // Update progress indicators
+    this.updateProgressIndicators();
+  }
+  
+  showSubmitButton() {
+    const submitBtn = this.form.querySelector('[type="submit"]');
+    if (submitBtn) {
+      submitBtn.style.display = 'block';
+      submitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-
-    hideSubmitButtons() {
-      this.elements.submitButtons.forEach(btn => {
-        btn.style.display = 'none';
-      });
-    }
-
+  }
+  
   // ============================================
   // 5. AUTO-ADVANCE SYSTEM
   // ============================================
@@ -784,7 +640,7 @@
       // Let Webflow handle it
       this.form.submit();
       
-    } else if (this.submissionMode === 'custom') {
+    } else if (this.submissionMode === 'webhook' || this.submissionMode === 'custom') {
       // Custom handling
       try {
         const result = await this.customSubmit();
@@ -834,7 +690,7 @@
                           this.form.querySelector('.w-form-done');
     
     if (successElement) {
-      this.hideAllSteps();
+      this.elements.steps.forEach(step => step.style.display = 'none');
       successElement.style.display = 'block';
     } else {
       alert('Vielen Dank! Ihre Anfrage wurde erfolgreich gesendet.');
@@ -873,7 +729,6 @@
   // 12. PUBLIC API
   // ============================================
   
-  // Go to specific step
   goToStep(stepNumber) {
     if (stepNumber >= 0 && stepNumber < this.visibleSteps.length) {
       this.state.currentStep = stepNumber;
@@ -884,7 +739,6 @@
     }
   }
   
-  // Reset form
   reset() {
     this.state.currentStep = 0;
     this.state.formData = {};
@@ -898,13 +752,11 @@
     }
   }
   
-  // Get current data
   getData() {
     this.captureStepData();
     return { ...this.state.formData };
   }
   
-  // Set data programmatically
   setData(data) {
     this.state.formData = { ...this.state.formData, ...data };
     this.restoreFormFields();
@@ -912,10 +764,8 @@
     this.saveProgress();
   }
   
-  // Destroy instance
   destroy() {
     this.form.classList.remove('finish-flow-initialized');
-    // Remove event listeners, etc.
     if (this.config.debug) {
       console.log('🗑️ FinishFlow destroyed');
     }
@@ -926,10 +776,8 @@
 // GLOBAL INITIALIZATION
 // ============================================
 
-// Make FinishFlow available globally
 window.FinishFlow = FinishFlow;
 
-// Auto-initialize forms
 document.addEventListener('DOMContentLoaded', function() {
   const autoInitForms = document.querySelectorAll('[data-finish-flow][data-auto-init]');
   
@@ -943,4 +791,3 @@ document.addEventListener('DOMContentLoaded', function() {
   
   console.log('✅ Finish Flow v2.0.0 loaded');
 });
-
