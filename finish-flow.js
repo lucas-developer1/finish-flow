@@ -1,731 +1,725 @@
 /**
- * Finish Flow - Smart Multi-Step Form System for Webflow
- * Version: 1.0.0
- * Author: Your Name
- * License: MIT
+ * ╔══════════════════════════════════════════════════════════════════╗
+ * ║                    FINISH FLOW v2.0.0                           ║
+ * ║          Smart Multi-Step Form System for Webflow               ║
+ * ║                                                                  ║
+ * ║  Features:                                                       ║
+ * ║  • Works with OR without Webflow Form element                   ║
+ * ║  • Conditional Logic (show-if/hide-if)                          ║
+ * ║  • Auto-Advance (Radio/Select)                                  ║
+ * ║  • Progress Persistence                                         ║
+ * ║  • Custom Submission Handling                                   ║
+ * ║  • Robust & Production-Ready                                    ║
+ * ║                                                                  ║
+ * ║  License: MIT                                                    ║
+ * ╚══════════════════════════════════════════════════════════════╝
  */
 
-class FinishFlow {
-  constructor(formSelector, options = {}) {
-    this.form = document.querySelector(formSelector);
-    
-    if (!this.form) {
-      console.error('FinishFlow: Form not found:', formSelector);
-      return;
-    }
-    
-    // Default options
-    this.options = {
-      autoSaveDelay: 500,
-      progressExpiryHours: 24,
-      confirmRestore: true,
-      animations: true,
-      debug: false,
-      ...options
-    };
-    
-    this.steps = Array.from(this.form.querySelectorAll('[data-form-step]'));
-    this.currentStep = 0;
-    this.formData = {};
-    this.storageKey = 'finish_flow_' + (this.form.id || 'form');
-    
-    if (this.steps.length === 0) {
-      console.error('FinishFlow: No steps found. Add [data-form-step] attributes to your step elements.');
-      return;
-    }
-    
-    if (this.options.debug) {
-      console.log('FinishFlow initialized:', {
-        steps: this.steps.length,
-        formId: this.form.id,
-        options: this.options
-      });
-    }
-    
-    this.init();
-  }
-  
-  init() {
-    this.form.classList.add('finish-flow-initialized');
-    this.hideAllSteps();
-    this.loadSavedProgress();
-    this.setupEventListeners();
-    this.setupAutoAdvance();
-    this.showStep(this.currentStep);
-    this.evaluateConditionals();
-  }
-  
-  hideAllSteps() {
-    this.steps.forEach(step => {
-      step.style.display = 'none';
-    });
-  }
-  
-showStep(stepIndex) {
-  if (this.options.debug) {
-    console.log('FinishFlow: showStep() called with index', stepIndex);
-  }
-  
-  // WICHTIG: Alle Steps explizit verstecken
-  this.steps.forEach((step, i) => {
-    step.style.display = 'none';
-    if (this.options.debug && i === stepIndex) {
-      console.log('FinishFlow: About to show step', i, step.getAttribute('data-form-step'));
-    }
-  });
-  
-  if (this.steps[stepIndex]) {
-    const step = this.steps[stepIndex];
-    step.style.display = 'block';
-    
-    if (this.options.debug) {
-      console.log('FinishFlow: Step', stepIndex, 'is now visible. Display:', window.getComputedStyle(step).display);
-    }
-    
-    // Animation
-    if (this.options.animations) {
-      step.style.animation = 'none';
-      setTimeout(() => {
-        step.style.animation = 'finishFlowFadeIn 0.3s ease-in';
-      }, 10);
-    }
-    
-    this.currentStep = stepIndex;
-    this.updateProgressIndicators();
-    this.saveProgress();
-    
-    // Scroll to top of form
-    if (stepIndex > 0) {
-      this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    
-    // Focus first input in new step
-    const firstInput = step.querySelector('input, select, textarea');
-    if (firstInput && firstInput.type !== 'hidden') {
-      setTimeout(() => firstInput.focus(), 100);
-    }
-    
-    // Preload next step für bessere Performance  
-    this.preloadNextStep();
-  } else {
-    if (this.options.debug) {
-      console.error('FinishFlow: Step at index', stepIndex, 'not found!');
-    }
-  }
-}
+(function(window) {
+  'use strict';
 
+  /**
+   * Main FinishFlow Class
+   */
+  class FinishFlow {
+    constructor(selector, options = {}) {
+      // Find container (can be form or div)
+      this.container = typeof selector === 'string' 
+        ? document.querySelector(selector) 
+        : selector;
 
-  
-nextStep() {
-  if (this.options.debug) {
-    console.log('FinishFlow: nextStep() called from step', this.currentStep);
-  }
-  
-  if (this.validateCurrentStep()) {
-    this.captureStepData();
-    this.evaluateConditionals();
-    
-    // Finde den nächsten sichtbaren Step
-    let nextIndex = this.currentStep + 1;
-    
-    if (this.options.debug) {
-      console.log('FinishFlow: Looking for next step after index', this.currentStep);
+      if (!this.container) {
+        console.error('[FinishFlow] Container not found:', selector);
+        return;
+      }
+
+      // Default options
+      this.options = {
+        // Core
+        debug: false,
+        animations: true,
+        
+        // Progress
+        saveProgress: true,
+        progressKey: null, // Auto-generated if null
+        progressExpiryHours: 24,
+        confirmRestore: true,
+        
+        // Submission
+        submissionMode: 'auto', // 'auto', 'webflow', 'webhook', 'custom'
+        webhookUrl: null,
+        webhookMethod: 'POST',
+        
+        // Callbacks
+        onInit: null,
+        onStepChange: null,
+        onSubmit: null,
+        onSubmitSuccess: null,
+        onSubmitError: null,
+        
+        ...options
+      };
+
+      // State
+      this.state = {
+        currentStepIndex: 0,
+        formData: {},
+        visibleSteps: [],
+        isSubmitting: false,
+        initialized: false
+      };
+
+      // Elements cache
+      this.elements = {
+        steps: [],
+        nextButtons: [],
+        prevButtons: [],
+        submitButtons: [],
+        progressBar: null,
+        stepIndicator: null,
+        stepNumbers: []
+      };
+
+      // Initialize
+      this.init();
     }
+
+    /**
+     * ══════════════════════════════════════════════════════════
+     * INITIALIZATION
+     * ══════════════════════════════════════════════════════════
+     */
     
-    while (nextIndex < this.steps.length) {
-      const nextStep = this.steps[nextIndex];
+    init() {
+      this.log('🚀 Initializing FinishFlow v2.0');
       
-      // Checke ob Step conditional ist und versteckt
-      const isConditional = nextStep.hasAttribute('data-show-if') || 
-                           nextStep.hasAttribute('data-hide-if');
-      const isHidden = nextStep.style.display === 'none';
+      // Detect submission mode
+      this.detectSubmissionMode();
       
-      if (this.options.debug) {
-        console.log('FinishFlow: Checking step', nextIndex, {
-          stepNumber: nextStep.getAttribute('data-form-step'),
-          isConditional,
-          isHidden,
-          display: nextStep.style.display
-        });
+      // Cache elements
+      this.cacheElements();
+      
+      // Validate setup
+      if (!this.validate()) {
+        return;
       }
       
-      if (isConditional && isHidden) {
-        // Überspringe diesen Step
-        nextIndex++;
-        
-        if (this.options.debug) {
-          console.log('FinishFlow: ⏭️ Skipping conditional step', nextStep.getAttribute('data-form-step'));
-        }
+      // Setup
+      this.setupStorage();
+      this.setupEventListeners();
+      this.setupAutoAdvance();
+      
+      // Load saved progress
+      if (this.options.saveProgress) {
+        this.loadProgress();
+      }
+      
+      // Initial render
+      this.updateVisibility();
+      this.render();
+      
+      // Mark as initialized
+      this.state.initialized = true;
+      this.container.classList.add('ff-initialized');
+      
+      this.log('✅ FinishFlow initialized', {
+        steps: this.elements.steps.length,
+        mode: this.options.submissionMode
+      });
+      
+      // Callback
+      if (this.options.onInit) {
+        this.options.onInit(this);
+      }
+    }
+
+    detectSubmissionMode() {
+      if (this.options.submissionMode !== 'auto') {
+        return; // User specified
+      }
+
+      // Auto-detect
+      if (this.container.tagName === 'FORM') {
+        this.options.submissionMode = 'webflow';
+        this.log('📝 Detected: Webflow Form');
+      } else if (this.options.webhookUrl) {
+        this.options.submissionMode = 'webhook';
+        this.log('🔗 Detected: Webhook Mode');
       } else {
-        // Dieser Step kann angezeigt werden
-        if (this.options.debug) {
-          console.log('FinishFlow: ✅ Found next visible step at index', nextIndex);
-        }
-        break;
+        this.options.submissionMode = 'custom';
+        this.log('⚙️ Detected: Custom Mode');
       }
     }
-    
-    if (nextIndex < this.steps.length) {
-      if (this.options.debug) {
-        console.log('FinishFlow: 🚀 Going to step', nextIndex);
-      }
-      this.showStep(nextIndex);
-    } else {
-      // Kein nächster Step mehr - zeige Submit
-      if (this.options.debug) {
-        console.log('FinishFlow: No more steps - showing submit button');
-      }
-      this.showSubmitButton();
-    }
-  } else {
-    if (this.options.debug) {
-      console.log('FinishFlow: ❌ Validation failed, staying on current step');
-    }
-  }
-}
 
-prevStep() {
-  // Finde den vorherigen sichtbaren Step
-  let prevIndex = this.currentStep - 1;
-  
-  while (prevIndex >= 0) {
-    const prevStep = this.steps[prevIndex];
-    
-    // Checke ob Step conditional ist und versteckt
-    const isConditional = prevStep.hasAttribute('data-show-if') || 
-                         prevStep.hasAttribute('data-hide-if');
-    const isHidden = prevStep.style.display === 'none';
-    
-    if (isConditional && isHidden) {
-      // Überspringe diesen Step
-      prevIndex--;
-      
-      if (this.options.debug) {
-        console.log('FinishFlow: Skipping conditional step backwards', prevStep.getAttribute('data-form-step'));
-      }
-    } else {
-      // Dieser Step kann angezeigt werden
-      break;
-    }
-  }
-  
-  if (prevIndex >= 0) {
-    this.showStep(prevIndex);
-  } else {
-    // Gehe zu Step 0
-    this.showStep(0);
-  }
-}
-  preloadNextStep() {
-  // Preload images/content vom nächsten Step für schnellere Transitions
-  if (this.currentStep < this.steps.length - 1) {
-    const nextStep = this.steps[this.currentStep + 1];
-    
-    // Preload images
-    const images = nextStep.querySelectorAll('img');
-    images.forEach(img => {
-      if (!img.complete) {
-        img.loading = 'eager';
-        // Trigger image load
-        const src = img.src;
-        if (src) {
-          const preloadImg = new Image();
-          preloadImg.src = src;
-        }
-      }
-    });
-    
-    // Preload background images
-    const elementsWithBg = nextStep.querySelectorAll('[style*="background-image"]');
-    elementsWithBg.forEach(el => {
-      const bgUrl = el.style.backgroundImage.match(/url\(['"]?([^'"]+)['"]?\)/);
-      if (bgUrl && bgUrl[1]) {
-        const preloadImg = new Image();
-        preloadImg.src = bgUrl[1];
-      }
-    });
-  }
-}
+    cacheElements() {
+      // Steps
+      this.elements.steps = Array.from(
+        this.container.querySelectorAll('[data-form-step]')
+      );
 
-  
-  showSubmitButton() {
-    const submitBtn = this.form.querySelector('[type="submit"]');
-    if (submitBtn) {
-      submitBtn.style.display = 'block';
-      submitBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }
-  
-setupAutoAdvance() {
-  // Auto-advance für Div-Container mit Radio Buttons
-  const autoAdvanceGroups = this.form.querySelectorAll('[data-auto-advance="true"]');
-  
-  if (this.options.debug) {
-    console.log('FinishFlow: setupAutoAdvance - Groups found:', autoAdvanceGroups.length);
-  }
-  
-  autoAdvanceGroups.forEach(group => {
-    const radioButtons = group.querySelectorAll('input[type="radio"]');
-    
-    if (this.options.debug) {
-      console.log('FinishFlow: Auto-advance group has radios:', radioButtons.length);
-    }
-    
-    radioButtons.forEach(radio => {
-      if (this.options.debug) {
-        console.log('FinishFlow: Adding listener to radio:', radio.name, radio.value);
-      }
+      // Buttons
+      this.elements.nextButtons = Array.from(
+        this.container.querySelectorAll('[data-next-button]')
+      );
       
-      // Sofortiges visuelles Feedback
-      radio.addEventListener('change', (e) => {
-        if (this.options.debug) {
-          console.log('FinishFlow: Radio CHANGED!', {
-            name: radio.name,
-            value: radio.value,
-            checked: radio.checked
-          });
-        }
-        
-        // Markiere Selection visuell SOFORT
-        const label = radio.closest('label') || radio.parentElement;
-        if (label) {
-          label.classList.add('finish-flow-selected');
-        }
-        
-        // Capture data und advance mit minimalem Delay
-        setTimeout(() => {
-          if (this.options.debug) {
-            console.log('FinishFlow: About to capture and advance...');
-          }
-          
-          this.captureStepData();
-          
-          if (this.options.debug) {
-            console.log('FinishFlow: Data captured:', this.formData);
-          }
-          
-          this.evaluateConditionals();
-          
-          if (this.options.debug) {
-            console.log('FinishFlow: Conditionals evaluated, calling nextStep()');
-          }
-          
-          this.nextStep();
-        }, 100);
-      }, true); // useCapture = true
-      
-      // Hover-Effekt für besseres Feedback
-      const label = radio.closest('label') || radio.parentElement;
-      if (label) {
-        label.addEventListener('mouseenter', () => {
-          label.classList.add('finish-flow-hover');
-        });
-        label.addEventListener('mouseleave', () => {
-          label.classList.remove('finish-flow-hover');
-        });
-      }
-    });
-  });
-  
-  // Auto-advance für einzelne Radio-Button-Gruppen per name
-  const radioGroups = this.form.querySelectorAll('input[type="radio"][data-auto-advance]');
-  const processedGroups = new Set();
-  
-  if (this.options.debug && radioGroups.length > 0) {
-    console.log('FinishFlow: Found individual auto-advance radios:', radioGroups.length);
-  }
-  
-  radioGroups.forEach(radio => {
-    const groupName = radio.name;
-    
-    if (!processedGroups.has(groupName)) {
-      processedGroups.add(groupName);
-      
-      const allRadiosInGroup = this.form.querySelectorAll(`input[type="radio"][name="${groupName}"]`);
-      
-      if (this.options.debug) {
-        console.log('FinishFlow: Processing individual radio group:', groupName, 'count:', allRadiosInGroup.length);
-      }
-      
-      allRadiosInGroup.forEach(r => {
-        // Sofortiges visuelles Feedback
-        r.addEventListener('change', () => {
-          if (this.options.debug) {
-            console.log('FinishFlow: Individual radio changed:', r.name, r.value);
-          }
-          
-          // Remove selected class from all in group
-          allRadiosInGroup.forEach(otherRadio => {
-            const otherLabel = otherRadio.closest('label') || otherRadio.parentElement;
-            if (otherLabel) {
-              otherLabel.classList.remove('finish-flow-selected');
-            }
-          });
-          
-          // Add selected class to clicked one
-          const label = r.closest('label') || r.parentElement;
-          if (label) {
-            label.classList.add('finish-flow-selected');
-          }
-          
-          // Advance mit minimalem Delay
-          setTimeout(() => {
-            this.captureStepData();
-            this.evaluateConditionals();
-            this.nextStep();
-          }, 100);
-        }, true);
-        
-        // Hover-Effekt
-        const label = r.closest('label') || r.parentElement;
-        if (label) {
-          label.addEventListener('mouseenter', () => {
-            label.classList.add('finish-flow-hover');
-          });
-          label.addEventListener('mouseleave', () => {
-            label.classList.remove('finish-flow-hover');
-          });
-        }
+      this.elements.prevButtons = Array.from(
+        this.container.querySelectorAll('[data-prev-button]')
+      );
+
+      // Submit buttons (both types)
+      this.elements.submitButtons = Array.from(
+        this.container.querySelectorAll('[data-submit-button], [type="submit"]')
+      );
+
+      // UI Indicators
+      this.elements.progressBar = this.container.querySelector('[data-progress-bar]');
+      this.elements.stepIndicator = this.container.querySelector('[data-step-indicator]');
+      this.elements.stepNumbers = Array.from(
+        this.container.querySelectorAll('[data-step-number]')
+      );
+
+      this.log('📦 Elements cached', {
+        steps: this.elements.steps.length,
+        nextButtons: this.elements.nextButtons.length,
+        prevButtons: this.elements.prevButtons.length,
+        submitButtons: this.elements.submitButtons.length
       });
     }
-  });
-  
-  // Auto-advance für Select Dropdowns
-  const autoAdvanceSelects = this.form.querySelectorAll('select[data-auto-advance]');
-  
-  if (this.options.debug && autoAdvanceSelects.length > 0) {
-    console.log('FinishFlow: Found auto-advance selects:', autoAdvanceSelects.length);
-  }
-  
-  autoAdvanceSelects.forEach(select => {
-    select.addEventListener('change', () => {
-      if (this.options.debug) {
-        console.log('FinishFlow: Select changed:', select.name, select.value);
-      }
-      
-      setTimeout(() => {
-        this.captureStepData();
-        this.evaluateConditionals();
-        this.nextStep();
-      }, 150);
-    });
-  });
-  
-  if (this.options.debug) {
-    console.log('FinishFlow: setupAutoAdvance completed');
-  }
-}
 
+    validate() {
+      if (this.elements.steps.length === 0) {
+        console.error('[FinishFlow] No steps found! Add [data-form-step] attributes.');
+        return false;
+      }
 
-  
-evaluateConditionals() {
-  // Show-if Logik
-  const showIfElements = this.form.querySelectorAll('[data-show-if]');
-  
-  if (this.options.debug) {
-    console.log('FinishFlow: Evaluating conditionals - found', showIfElements.length, 'elements');
-  }
-  
-  showIfElements.forEach(el => {
-    const condition = el.getAttribute('data-show-if');
-    const conditions = condition.split(',').map(c => c.trim());
-    let allMatch = true;
-    
-    conditions.forEach(cond => {
-      const [fieldName, expectedValue] = cond.split('=').map(s => s.trim());
-      const actualValue = this.formData[fieldName];
+      // Check step numbers
+      const stepNumbers = this.elements.steps.map(s => s.getAttribute('data-form-step'));
+      const uniqueNumbers = new Set(stepNumbers);
       
-      if (this.options.debug) {
-        console.log('FinishFlow: Checking condition:', {
-          condition: cond,
-          fieldName,
-          expectedValue,
-          actualValue,
-          matches: actualValue == expectedValue
-        });
+      if (stepNumbers.length !== uniqueNumbers.size) {
+        console.warn('[FinishFlow] Duplicate step numbers detected. This may cause issues.');
       }
-      
-      if (actualValue != expectedValue) {
-        allMatch = false;
-      }
-    });
-    
-    if (allMatch) {
-      el.style.display = 'block';
-      // Wenn es ein Step ist, aktiviere ihn
-      if (el.hasAttribute('data-form-step')) {
-        el.removeAttribute('data-conditional-hidden');
-        
-        if (this.options.debug) {
-          console.log('FinishFlow: ✅ SHOWING conditional step', el.getAttribute('data-form-step'));
-        }
-      }
-    } else {
-      el.style.display = 'none';
-      if (el.hasAttribute('data-form-step')) {
-        el.setAttribute('data-conditional-hidden', 'true');
-        
-        if (this.options.debug) {
-          console.log('FinishFlow: ❌ HIDING conditional step', el.getAttribute('data-form-step'));
-        }
-      }
-    }
-  });
-  
-  // Hide-if Logik (umgekehrte Bedingung)
-  const hideIfElements = this.form.querySelectorAll('[data-hide-if]');
-  
-  hideIfElements.forEach(el => {
-    const condition = el.getAttribute('data-hide-if');
-    const [fieldName, expectedValue] = condition.split('=').map(s => s.trim());
-    const actualValue = this.formData[fieldName];
-    
-    if (this.options.debug) {
-      console.log('FinishFlow: Checking hide-if:', {
-        fieldName,
-        expectedValue,
-        actualValue,
-        shouldHide: actualValue == expectedValue
-      });
-    }
-    
-    if (actualValue == expectedValue) {
-      el.style.display = 'none';
-      if (el.hasAttribute('data-form-step')) {
-        el.setAttribute('data-conditional-hidden', 'true');
-      }
-    } else {
-      el.style.display = 'block';
-      if (el.hasAttribute('data-form-step')) {
-        el.removeAttribute('data-conditional-hidden');
-      }
-    }
-  });
-  
-  if (this.options.debug) {
-    console.log('FinishFlow: Conditionals evaluation complete');
-  }
-}
 
-  
-  captureStepData() {
-    const currentStepElement = this.steps[this.currentStep];
-    const inputs = currentStepElement.querySelectorAll('input, select, textarea');
-    
-    inputs.forEach(input => {
-      if (input.name) {
+      return true;
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════
+     * STATE MANAGEMENT
+     * ══════════════════════════════════════════════════════════
+     */
+
+    captureData() {
+      const currentStep = this.getCurrentStep();
+      if (!currentStep) return;
+
+      const inputs = currentStep.querySelectorAll('input, select, textarea');
+      
+      inputs.forEach(input => {
+        if (!input.name) return;
+
         if (input.type === 'checkbox') {
-          this.formData[input.name] = input.checked;
+          this.state.formData[input.name] = input.checked;
         } else if (input.type === 'radio') {
           if (input.checked) {
-            this.formData[input.name] = input.value;
+            this.state.formData[input.name] = input.value;
           }
         } else {
-          this.formData[input.name] = input.value;
+          this.state.formData[input.name] = input.value;
+        }
+      });
+
+      this.log('📊 Data captured', this.state.formData);
+    }
+
+    getAllData() {
+      // Capture current step data
+      this.captureData();
+      
+      // Return copy
+      return { ...this.state.formData };
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════
+     * VISIBILITY & CONDITIONAL LOGIC
+     * ══════════════════════════════════════════════════════════
+     */
+
+    updateVisibility() {
+      this.log('👁️ Updating visibility');
+
+      // Evaluate all conditional steps
+      this.elements.steps.forEach(step => {
+        const showIf = step.getAttribute('data-show-if');
+        const hideIf = step.getAttribute('data-hide-if');
+
+        let shouldShow = true;
+
+        // Check show-if
+        if (showIf) {
+          shouldShow = this.evaluateCondition(showIf);
+        }
+
+        // Check hide-if
+        if (hideIf && shouldShow) {
+          shouldShow = !this.evaluateCondition(hideIf);
+        }
+
+        // Apply visibility
+        if (shouldShow) {
+          step.removeAttribute('data-ff-hidden');
+        } else {
+          step.setAttribute('data-ff-hidden', 'true');
+        }
+      });
+
+      // Update visible steps list
+      this.state.visibleSteps = this.elements.steps.filter(
+        step => !step.hasAttribute('data-ff-hidden')
+      );
+
+      this.log('✅ Visible steps:', this.state.visibleSteps.length);
+    }
+
+    evaluateCondition(conditionString) {
+      const conditions = conditionString.split(',').map(c => c.trim());
+      
+      // AND logic (all must match)
+      return conditions.every(condition => {
+        const [fieldName, expectedValue] = condition.split('=').map(s => s.trim());
+        const actualValue = this.state.formData[fieldName];
+        
+        return String(actualValue) === String(expectedValue);
+      });
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════
+     * NAVIGATION
+     * ══════════════════════════════════════════════════════════
+     */
+
+    getCurrentStep() {
+      return this.state.visibleSteps[this.state.currentStepIndex] || null;
+    }
+
+    goToStep(index) {
+      if (index < 0 || index >= this.state.visibleSteps.length) {
+        this.log('❌ Invalid step index:', index);
+        return false;
+      }
+
+      this.log(`🎯 Going to step ${index}`);
+      
+      this.state.currentStepIndex = index;
+      this.render();
+      
+      return true;
+    }
+
+    nextStep() {
+      this.log('➡️ Next step requested');
+
+      // Validate current step
+      if (!this.validateCurrentStep()) {
+        this.log('❌ Validation failed');
+        return false;
+      }
+
+      // Capture data
+      this.captureData();
+
+      // Update visibility (conditionals may have changed)
+      this.updateVisibility();
+
+      // Check if there's a next step
+      const nextIndex = this.state.currentStepIndex + 1;
+
+      if (nextIndex < this.state.visibleSteps.length) {
+        this.goToStep(nextIndex);
+      } else {
+        this.log('🏁 Last step reached');
+        this.showSubmitButtons();
+      }
+
+      return true;
+    }
+
+    prevStep() {
+      this.log('⬅️ Previous step requested');
+
+      const prevIndex = this.state.currentStepIndex - 1;
+
+      if (prevIndex >= 0) {
+        this.goToStep(prevIndex);
+      } else {
+        this.log('⚠️ Already at first step');
+      }
+
+      return true;
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════
+     * RENDERING
+     * ══════════════════════════════════════════════════════════
+     */
+
+    render() {
+      this.log('🎨 Rendering');
+
+      // Hide all steps
+      this.elements.steps.forEach(step => {
+        step.style.display = 'none';
+      });
+
+      // Show current step
+      const currentStep = this.getCurrentStep();
+      if (currentStep) {
+        currentStep.style.display = 'block';
+
+        // Animation
+        if (this.options.animations) {
+          currentStep.style.animation = 'none';
+          setTimeout(() => {
+            currentStep.style.animation = 'ffFadeIn 0.3s ease';
+          }, 10);
+        }
+
+        // Scroll into view
+        if (this.state.currentStepIndex > 0) {
+          this.container.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          });
+        }
+
+        // Focus first input
+        const firstInput = currentStep.querySelector('input:not([type="hidden"]), select, textarea');
+        if (firstInput) {
+          setTimeout(() => firstInput.focus(), 100);
         }
       }
-    });
+
+      // Update UI
+      this.updateProgressIndicators();
+      this.hideSubmitButtons();
+
+      // Save progress
+      if (this.options.saveProgress) {
+        this.saveProgress();
+      }
+
+      // Callback
+      if (this.options.onStepChange) {
+        this.options.onStepChange(this.state.currentStepIndex, currentStep);
+      }
+    }
+
+    updateProgressIndicators() {
+      const total = this.state.visibleSteps.length;
+      const current = this.state.currentStepIndex + 1;
+      const progress = (current / total) * 100;
+
+      // Progress bar
+      if (this.elements.progressBar) {
+        this.elements.progressBar.style.width = `${progress}%`;
+      }
+
+      // Step indicator text
+      if (this.elements.stepIndicator) {
+        this.elements.stepIndicator.textContent = `Schritt ${current} von ${total}`;
+      }
+
+      // Step numbers
+      this.elements.stepNumbers.forEach((num, index) => {
+        num.classList.remove('active', 'completed');
+        
+        if (index === this.state.currentStepIndex) {
+          num.classList.add('active');
+        } else if (index < this.state.currentStepIndex) {
+          num.classList.add('completed');
+        }
+
+        // Hide if beyond visible steps
+        if (index >= total) {
+          num.style.display = 'none';
+        } else {
+          num.style.display = '';
+        }
+      });
+    }
+
+    showSubmitButtons() {
+      this.elements.submitButtons.forEach(btn => {
+        btn.style.display = '';
+      });
+    }
+
+    hideSubmitButtons() {
+      this.elements.submitButtons.forEach(btn => {
+        btn.style.display = 'none';
+      });
+    }
+
+  // ============================================
+  // 5. AUTO-ADVANCE SYSTEM
+  // ============================================
+  
+  setupAutoAdvance() {
+    const autoAdvanceSteps = this.form.querySelectorAll('[data-auto-advance="true"]');
     
-    if (this.options.debug) {
-      console.log('FinishFlow: Form data captured:', this.formData);
+    if (this.config.debug) {
+      console.log('🚀 Setting up auto-advance for', autoAdvanceSteps.length, 'steps');
+    }
+    
+    autoAdvanceSteps.forEach(step => {
+      const radios = step.querySelectorAll('input[type="radio"]');
+      const selects = step.querySelectorAll('select');
+      
+      // Radio buttons
+      radios.forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          if (this.config.debug) {
+            console.log('📻 Radio changed:', e.target.name, '=', e.target.value);
+          }
+          
+          // Visual feedback
+          this.addVisualFeedback(radio);
+          
+          // Auto-advance after short delay
+          setTimeout(() => {
+            this.captureStepData();
+            this.updateVisibility();
+            this.nextStep();
+          }, this.config.autoAdvanceDelay);
+        }, true); // useCapture = true
+      });
+      
+      // Select dropdowns
+      selects.forEach(select => {
+        select.addEventListener('change', (e) => {
+          if (this.config.debug) {
+            console.log('📝 Select changed:', e.target.name, '=', e.target.value);
+          }
+          
+          setTimeout(() => {
+            this.captureStepData();
+            this.updateVisibility();
+            this.nextStep();
+          }, this.config.autoAdvanceDelay + 50);
+        });
+      });
+    });
+  }
+  
+  addVisualFeedback(element) {
+    const container = element.closest('label') || element.parentElement;
+    if (container) {
+      container.classList.add('finish-flow-selected');
+      
+      // Remove from siblings
+      const siblings = container.parentElement?.querySelectorAll('.finish-flow-selected');
+      siblings?.forEach(sibling => {
+        if (sibling !== container) {
+          sibling.classList.remove('finish-flow-selected');
+        }
+      });
     }
   }
   
+  // ============================================
+  // 6. PROGRESS SYSTEM (LocalStorage)
+  // ============================================
+  
   saveProgress() {
+    if (!this.config.saveProgress) return;
+    
     const progressData = {
-      step: this.currentStep,
-      data: this.formData,
+      step: this.state.currentStep,
+      data: this.state.formData,
       timestamp: Date.now(),
-      version: '1.0.0'
+      version: '2.0.0'
     };
     
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(progressData));
       
-      if (this.options.debug) {
-        console.log('FinishFlow: Progress saved');
+      if (this.config.debug) {
+        console.log('💾 Progress saved:', progressData);
       }
     } catch (e) {
-      console.error('FinishFlow: Could not save progress:', e);
+      console.error('❌ Failed to save progress:', e);
     }
   }
   
-  loadSavedProgress() {
-    const saved = localStorage.getItem(this.storageKey);
+  loadProgress() {
+    if (!this.config.saveProgress) return false;
     
-    if (saved) {
-      try {
-        const { step, data, timestamp } = JSON.parse(saved);
-        
-        const hoursSince = (Date.now() - timestamp) / 1000 / 60 / 60;
-        
-        if (hoursSince < this.options.progressExpiryHours) {
-          if (this.options.confirmRestore) {
-            const message = 'Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?';
-            if (confirm(message)) {
-              this.currentStep = step;
-              this.formData = data;
-              this.restoreFormFields();
-              
-              if (this.options.debug) {
-                console.log('FinishFlow: Progress restored');
-              }
-            } else {
-              this.clearProgress();
-            }
-          } else {
-            // Auto-restore ohne Nachfrage
-            this.currentStep = step;
-            this.formData = data;
-            this.restoreFormFields();
-          }
-        } else {
-          this.clearProgress();
-          
-          if (this.options.debug) {
-            console.log('FinishFlow: Progress expired and cleared');
-          }
-        }
-      } catch (e) {
-        console.error('FinishFlow: Could not restore progress:', e);
+    try {
+      const saved = localStorage.getItem(this.storageKey);
+      if (!saved) return false;
+      
+      const { step, data, timestamp } = JSON.parse(saved);
+      
+      // Check expiry
+      const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
+      if (hoursAgo > this.config.progressExpiry) {
         this.clearProgress();
+        return false;
       }
+      
+      // Ask user if they want to restore
+      if (this.config.confirmRestore) {
+        if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
+          this.clearProgress();
+          return false;
+        }
+      }
+      
+      // Restore state
+      this.state.currentStep = step;
+      this.state.formData = data;
+      this.restoreFormFields();
+      
+      if (this.config.debug) {
+        console.log('✅ Progress restored:', { step, data });
+      }
+      
+      return true;
+      
+    } catch (e) {
+      console.error('❌ Failed to load progress:', e);
+      this.clearProgress();
+      return false;
     }
   }
   
   restoreFormFields() {
-    Object.keys(this.formData).forEach(fieldName => {
-      const fields = this.form.querySelectorAll(`[name="${fieldName}"]`);
+    Object.entries(this.state.formData).forEach(([name, value]) => {
+      const fields = this.form.querySelectorAll(`[name="${name}"]`);
       
       fields.forEach(field => {
-        if (field.type === 'checkbox') {
-          field.checked = this.formData[fieldName];
-        } else if (field.type === 'radio') {
-          if (field.value === this.formData[fieldName]) {
-            field.checked = true;
-          }
+        if (field.type === 'radio' || field.type === 'checkbox') {
+          field.checked = (field.value === value || value === true);
         } else {
-          field.value = this.formData[fieldName];
+          field.value = value;
         }
       });
     });
   }
   
   clearProgress() {
-    localStorage.removeItem(this.storageKey);
-    
-    if (this.options.debug) {
-      console.log('FinishFlow: Progress cleared');
+    try {
+      localStorage.removeItem(this.storageKey);
+      if (this.config.debug) {
+        console.log('🗑️ Progress cleared');
+      }
+    } catch (e) {
+      console.error('❌ Failed to clear progress:', e);
     }
   }
   
-  validateCurrentStep() {
-    const currentStepElement = this.steps[this.currentStep];
-    const requiredInputs = currentStepElement.querySelectorAll('[required]');
+  // ============================================
+  // 7. VALIDATION SYSTEM
+  // ============================================
+  
+  validateStep(stepElement) {
+    const requiredFields = stepElement.querySelectorAll('[required]');
     let isValid = true;
+    const errors = [];
     
     // Clear previous errors
-    currentStepElement.querySelectorAll('.finish-flow-error').forEach(el => {
+    stepElement.querySelectorAll('.finish-flow-error').forEach(el => {
       el.classList.remove('finish-flow-error');
     });
     
-    requiredInputs.forEach(input => {
-      if (input.type === 'radio') {
-        const radioGroup = currentStepElement.querySelectorAll(`input[name="${input.name}"]`);
-        const isChecked = Array.from(radioGroup).some(r => r.checked);
+    requiredFields.forEach(field => {
+      let fieldValid = true;
+      
+      if (field.type === 'radio') {
+        const group = stepElement.querySelectorAll(`input[name="${field.name}"]`);
+        fieldValid = Array.from(group).some(r => r.checked);
         
-        if (!isChecked) {
-          radioGroup.forEach(r => {
-            if (r.parentElement) {
-              r.parentElement.classList.add('finish-flow-error');
-            }
-          });
-          isValid = false;
+        if (!fieldValid) {
+          group.forEach(r => r.parentElement?.classList.add('finish-flow-error'));
+          errors.push(`Bitte wählen Sie eine Option für "${field.name}"`);
         }
-      } else if (input.type === 'checkbox') {
-        if (!input.checked) {
-          if (input.parentElement) {
-            input.parentElement.classList.add('finish-flow-error');
-          }
-          isValid = false;
+        
+      } else if (field.type === 'checkbox') {
+        fieldValid = field.checked;
+        if (!fieldValid) {
+          field.parentElement?.classList.add('finish-flow-error');
+          errors.push(`Bitte bestätigen Sie "${field.name}"`);
         }
+        
       } else {
-        if (!input.value.trim()) {
-          input.classList.add('finish-flow-error');
-          isValid = false;
+        fieldValid = field.value.trim() !== '';
+        if (!fieldValid) {
+          field.classList.add('finish-flow-error');
+          errors.push(`Bitte füllen Sie "${field.name}" aus`);
         }
       }
+      
+      if (!fieldValid) isValid = false;
     });
     
     // Show/hide error message
-    const errorMsg = currentStepElement.querySelector('[data-error-message]');
-    if (errorMsg) {
+    const errorElement = stepElement.querySelector('[data-error-message]');
+    if (errorElement) {
       if (!isValid) {
-        errorMsg.style.display = 'block';
-        errorMsg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        errorElement.style.display = 'block';
+        errorElement.textContent = errors[0] || 'Bitte füllen Sie alle Pflichtfelder aus';
+        errorElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
-        errorMsg.style.display = 'none';
+        errorElement.style.display = 'none';
       }
     }
     
-    if (!isValid && this.options.debug) {
-      console.log('FinishFlow: Validation failed on step', this.currentStep);
+    if (this.config.debug && !isValid) {
+      console.log('❌ Validation failed:', errors);
     }
     
     return isValid;
   }
   
-updateProgressIndicators() {
-  // Zähle nur sichtbare Steps
-  const visibleSteps = this.steps.filter(step => {
-    return step.style.display !== 'none';
-  });
+  // ============================================
+  // 8. PROGRESS INDICATORS
+  // ============================================
   
-  const totalVisible = visibleSteps.length;
-  const currentVisible = visibleSteps.indexOf(this.steps[this.currentStep]) + 1;
-  
-  // Progress bar
-  const progressBar = this.form.querySelector('[data-progress-bar]');
-  if (progressBar) {
-    const progress = (currentVisible / totalVisible) * 100;
-    progressBar.style.width = progress + '%';
-  }
-  
-  // Step indicator text
-  const stepIndicator = this.form.querySelector('[data-step-indicator]');
-  if (stepIndicator) {
-    stepIndicator.textContent = `Schritt ${currentVisible} von ${totalVisible}`;
-  }
-  
-  // Step numbers/dots - update nur sichtbare
-  const stepNumbers = this.form.querySelectorAll('[data-step-number]');
-  let visibleIndex = 0;
-  
-  this.steps.forEach((step, index) => {
-    if (step.style.display !== 'none') {
-      if (stepNumbers[visibleIndex]) {
-        stepNumbers[visibleIndex].classList.remove('active', 'completed');
-        
-        if (index === this.currentStep) {
-          stepNumbers[visibleIndex].classList.add('active');
-        } else if (index < this.currentStep) {
-          stepNumbers[visibleIndex].classList.add('completed');
-        }
-      }
-      visibleIndex++;
+  updateProgressIndicators() {
+    // Progress bar
+    if (this.elements.progressBar) {
+      const progress = ((this.state.currentStep + 1) / this.visibleSteps.length) * 100;
+      this.elements.progressBar.style.width = progress + '%';
     }
-  });
-  
-  // Verstecke überzählige Step Numbers
-  for (let i = visibleIndex; i < stepNumbers.length; i++) {
-    stepNumbers[i].style.display = 'none';
+    
+    // Step indicator
+    if (this.elements.stepIndicator) {
+      this.elements.stepIndicator.textContent = 
+        `Schritt ${this.state.currentStep + 1} von ${this.visibleSteps.length}`;
+    }
+    
+    // Step numbers
+    this.elements.stepNumbers.forEach((num, index) => {
+      num.classList.remove('active', 'completed');
+      
+      if (index === this.state.currentStep) {
+        num.classList.add('active');
+      } else if (index < this.state.currentStep) {
+        num.classList.add('completed');
+      }
+    });
   }
-}
+  
+  // ============================================
+  // 9. EVENT LISTENERS
+  // ============================================
   
   setupEventListeners() {
     // Next buttons
-    const nextButtons = this.form.querySelectorAll('[data-next-button]');
-    nextButtons.forEach(btn => {
+    this.elements.nextButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         this.nextStep();
@@ -733,95 +727,220 @@ updateProgressIndicators() {
     });
     
     // Previous buttons
-    const prevButtons = this.form.querySelectorAll('[data-prev-button]');
-    prevButtons.forEach(btn => {
+    this.elements.prevButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         this.prevStep();
       });
     });
     
-    // Auto-save on input changes (debounced)
-    let saveTimeout;
-    this.form.addEventListener('input', () => {
-      clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(() => {
-        this.captureStepData();
-        this.saveProgress();
-        this.evaluateConditionals();
-      }, this.options.autoSaveDelay);
-    });
+    // Auto-save on input
+    this.form.addEventListener('input', this.debounce(() => {
+      this.captureStepData();
+      this.updateVisibility();
+      this.saveProgress();
+    }, this.config.autoSaveDelay));
     
     // Keyboard navigation
     this.form.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
-        const target = e.target;
+        const isAutoAdvance = e.target.hasAttribute('data-auto-advance') || 
+                            e.target.closest('[data-auto-advance]');
         
-        // Verhindere Enter bei Auto-Advance Elementen
-        if (!target.hasAttribute('data-auto-advance') && 
-            !target.closest('[data-auto-advance]')) {
+        if (!isAutoAdvance) {
           e.preventDefault();
           this.nextStep();
         }
       }
     });
     
-    // Clear progress on successful submission
+    // Form submission
     this.form.addEventListener('submit', (e) => {
-      if (this.options.debug) {
-        console.log('FinishFlow: Form submitted');
-      }
-      this.clearProgress();
+      e.preventDefault();
+      this.handleSubmit(e);
     });
   }
   
-  // Public API methods
-  goToStep(stepNumber) {
-    if (stepNumber >= 0 && stepNumber < this.steps.length) {
-      this.showStep(stepNumber);
-    } else {
-      console.error('FinishFlow: Invalid step number:', stepNumber);
+  // ============================================
+  // 10. FORM SUBMISSION
+  // ============================================
+  
+  async handleSubmit(e) {
+    e.preventDefault();
+    
+    if (this.config.debug) {
+      console.log('📨 Form submitted. Mode:', this.submissionMode);
+      console.log('📦 Form data:', this.state.formData);
+    }
+    
+    // Capture final data
+    this.captureStepData();
+    
+    // Clear progress
+    this.clearProgress();
+    
+    // Handle based on mode
+    if (this.submissionMode === 'webflow') {
+      // Let Webflow handle it
+      this.form.submit();
+      
+    } else if (this.submissionMode === 'custom') {
+      // Custom handling
+      try {
+        const result = await this.customSubmit();
+        
+        if (result.success) {
+          this.showSuccess();
+        } else {
+          this.showError(result.message);
+        }
+      } catch (error) {
+        console.error('❌ Submission failed:', error);
+        this.showError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+      }
     }
   }
   
+  async customSubmit() {
+    // Check for webhook URL
+    const webhookUrl = this.form.getAttribute('data-webhook-url');
+    
+    if (webhookUrl) {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.state.formData)
+      });
+      
+      return {
+        success: response.ok,
+        message: response.ok ? 'Erfolgreich gesendet!' : 'Fehler beim Senden'
+      };
+    }
+    
+    // Check for custom function
+    const customHandler = this.config.onSubmit;
+    if (typeof customHandler === 'function') {
+      return await customHandler(this.state.formData);
+    }
+    
+    // Default: just log
+    console.log('✅ Form data ready:', this.state.formData);
+    return { success: true, message: 'Daten erfasst' };
+  }
+  
+  showSuccess() {
+    const successElement = this.form.querySelector('[data-success-message]') || 
+                          this.form.querySelector('.w-form-done');
+    
+    if (successElement) {
+      this.hideAllSteps();
+      successElement.style.display = 'block';
+    } else {
+      alert('Vielen Dank! Ihre Anfrage wurde erfolgreich gesendet.');
+    }
+  }
+  
+  showError(message) {
+    const errorElement = this.form.querySelector('[data-form-error]') ||
+                        this.form.querySelector('.w-form-fail');
+    
+    if (errorElement) {
+      errorElement.textContent = message;
+      errorElement.style.display = 'block';
+    } else {
+      alert(message);
+    }
+  }
+  
+  // ============================================
+  // 11. HELPER UTILITIES
+  // ============================================
+  
+  debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+  
+  // ============================================
+  // 12. PUBLIC API
+  // ============================================
+  
+  // Go to specific step
+  goToStep(stepNumber) {
+    if (stepNumber >= 0 && stepNumber < this.visibleSteps.length) {
+      this.state.currentStep = stepNumber;
+      this.render();
+      this.saveProgress();
+    } else {
+      console.error('❌ Invalid step number:', stepNumber);
+    }
+  }
+  
+  // Reset form
   reset() {
-    this.currentStep = 0;
-    this.formData = {};
+    this.state.currentStep = 0;
+    this.state.formData = {};
     this.clearProgress();
     this.form.reset();
-    this.showStep(0);
+    this.updateVisibility();
+    this.render();
     
-    if (this.options.debug) {
-      console.log('FinishFlow: Form reset');
+    if (this.config.debug) {
+      console.log('🔄 Form reset');
     }
   }
   
+  // Get current data
   getData() {
     this.captureStepData();
-    return { ...this.formData };
+    return { ...this.state.formData };
   }
   
+  // Set data programmatically
   setData(data) {
-    this.formData = { ...this.formData, ...data };
+    this.state.formData = { ...this.state.formData, ...data };
     this.restoreFormFields();
+    this.updateVisibility();
     this.saveProgress();
+  }
+  
+  // Destroy instance
+  destroy() {
+    this.form.classList.remove('finish-flow-initialized');
+    // Remove event listeners, etc.
+    if (this.config.debug) {
+      console.log('🗑️ FinishFlow destroyed');
+    }
   }
 }
 
-// Make available globally
+// ============================================
+// GLOBAL INITIALIZATION
+// ============================================
+
+// Make FinishFlow available globally
 window.FinishFlow = FinishFlow;
 
-// Auto-initialize forms with data-auto-init
+// Auto-initialize forms
 document.addEventListener('DOMContentLoaded', function() {
   const autoInitForms = document.querySelectorAll('[data-finish-flow][data-auto-init]');
   
   autoInitForms.forEach(form => {
-    const formId = form.id || 'form_' + Math.random().toString(36).substr(2, 9);
-    form.id = formId;
+    if (!form.id) {
+      form.id = 'form_' + Math.random().toString(36).substr(2, 9);
+    }
     
-    new FinishFlow('#' + formId);
+    new FinishFlow('#' + form.id);
   });
   
-  console.log('FinishFlow v1.0.0 loaded');
+  console.log('✅ Finish Flow v2.0.0 loaded');
 });
 
