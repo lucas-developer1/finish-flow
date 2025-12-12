@@ -97,24 +97,76 @@ class FinishFlow {
 }
 
   
-  nextStep() {
-    if (this.validateCurrentStep()) {
-      this.captureStepData();
-      this.evaluateConditionals();
+nextStep() {
+  if (this.validateCurrentStep()) {
+    this.captureStepData();
+    this.evaluateConditionals();
+    
+    // Finde den nächsten sichtbaren Step
+    let nextIndex = this.currentStep + 1;
+    
+    while (nextIndex < this.steps.length) {
+      const nextStep = this.steps[nextIndex];
       
-      if (this.currentStep < this.steps.length - 1) {
-        this.showStep(this.currentStep + 1);
+      // Checke ob Step conditional ist und versteckt
+      const isConditional = nextStep.hasAttribute('data-show-if') || 
+                           nextStep.hasAttribute('data-hide-if');
+      const isHidden = nextStep.style.display === 'none';
+      
+      if (isConditional && isHidden) {
+        // Überspringe diesen Step
+        nextIndex++;
+        
+        if (this.options.debug) {
+          console.log('FinishFlow: Skipping conditional step', nextStep.getAttribute('data-form-step'));
+        }
       } else {
-        this.showSubmitButton();
+        // Dieser Step kann angezeigt werden
+        break;
       }
+    }
+    
+    if (nextIndex < this.steps.length) {
+      this.showStep(nextIndex);
+    } else {
+      // Kein nächster Step mehr - zeige Submit
+      this.showSubmitButton();
+    }
+  }
+}
+
+prevStep() {
+  // Finde den vorherigen sichtbaren Step
+  let prevIndex = this.currentStep - 1;
+  
+  while (prevIndex >= 0) {
+    const prevStep = this.steps[prevIndex];
+    
+    // Checke ob Step conditional ist und versteckt
+    const isConditional = prevStep.hasAttribute('data-show-if') || 
+                         prevStep.hasAttribute('data-hide-if');
+    const isHidden = prevStep.style.display === 'none';
+    
+    if (isConditional && isHidden) {
+      // Überspringe diesen Step
+      prevIndex--;
+      
+      if (this.options.debug) {
+        console.log('FinishFlow: Skipping conditional step backwards', prevStep.getAttribute('data-form-step'));
+      }
+    } else {
+      // Dieser Step kann angezeigt werden
+      break;
     }
   }
   
-  prevStep() {
-    if (this.currentStep > 0) {
-      this.showStep(this.currentStep - 1);
-    }
+  if (prevIndex >= 0) {
+    this.showStep(prevIndex);
+  } else {
+    // Gehe zu Step 0
+    this.showStep(0);
   }
+}
   preloadNextStep() {
   // Preload images/content vom nächsten Step für schnellere Transitions
   if (this.currentStep < this.steps.length - 1) {
@@ -479,32 +531,52 @@ setupAutoAdvance() {
     return isValid;
   }
   
-  updateProgressIndicators() {
-    // Progress bar
-    const progressBar = this.form.querySelector('[data-progress-bar]');
-    if (progressBar) {
-      const progress = ((this.currentStep + 1) / this.steps.length) * 100;
-      progressBar.style.width = progress + '%';
-    }
-    
-    // Step indicator text
-    const stepIndicator = this.form.querySelector('[data-step-indicator]');
-    if (stepIndicator) {
-      stepIndicator.textContent = `Schritt ${this.currentStep + 1} von ${this.steps.length}`;
-    }
-    
-    // Step numbers/dots
-    const stepNumbers = this.form.querySelectorAll('[data-step-number]');
-    stepNumbers.forEach((num, index) => {
-      num.classList.remove('active', 'completed');
-      
-      if (index === this.currentStep) {
-        num.classList.add('active');
-      } else if (index < this.currentStep) {
-        num.classList.add('completed');
-      }
-    });
+updateProgressIndicators() {
+  // Zähle nur sichtbare Steps
+  const visibleSteps = this.steps.filter(step => {
+    return step.style.display !== 'none';
+  });
+  
+  const totalVisible = visibleSteps.length;
+  const currentVisible = visibleSteps.indexOf(this.steps[this.currentStep]) + 1;
+  
+  // Progress bar
+  const progressBar = this.form.querySelector('[data-progress-bar]');
+  if (progressBar) {
+    const progress = (currentVisible / totalVisible) * 100;
+    progressBar.style.width = progress + '%';
   }
+  
+  // Step indicator text
+  const stepIndicator = this.form.querySelector('[data-step-indicator]');
+  if (stepIndicator) {
+    stepIndicator.textContent = `Schritt ${currentVisible} von ${totalVisible}`;
+  }
+  
+  // Step numbers/dots - update nur sichtbare
+  const stepNumbers = this.form.querySelectorAll('[data-step-number]');
+  let visibleIndex = 0;
+  
+  this.steps.forEach((step, index) => {
+    if (step.style.display !== 'none') {
+      if (stepNumbers[visibleIndex]) {
+        stepNumbers[visibleIndex].classList.remove('active', 'completed');
+        
+        if (index === this.currentStep) {
+          stepNumbers[visibleIndex].classList.add('active');
+        } else if (index < this.currentStep) {
+          stepNumbers[visibleIndex].classList.add('completed');
+        }
+      }
+      visibleIndex++;
+    }
+  });
+  
+  // Verstecke überzählige Step Numbers
+  for (let i = visibleIndex; i < stepNumbers.length; i++) {
+    stepNumbers[i].style.display = 'none';
+  }
+}
   
   setupEventListeners() {
     // Next buttons
