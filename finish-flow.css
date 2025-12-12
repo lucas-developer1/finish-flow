@@ -26,6 +26,10 @@
 .finish-flow-initialized [data-form-step].active {
   display: block;
 }
+/* Conditional Steps initial verstecken */
+[data-show-if] {
+  display: none !important;
+}
 
 /* ============================================
    ANIMATIONS
