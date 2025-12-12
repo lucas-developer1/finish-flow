@@ -98,12 +98,20 @@ class FinishFlow {
 
   
 nextStep() {
+  if (this.options.debug) {
+    console.log('FinishFlow: nextStep() called from step', this.currentStep);
+  }
+  
   if (this.validateCurrentStep()) {
     this.captureStepData();
     this.evaluateConditionals();
     
     // Finde den nächsten sichtbaren Step
     let nextIndex = this.currentStep + 1;
+    
+    if (this.options.debug) {
+      console.log('FinishFlow: Looking for next step after index', this.currentStep);
+    }
     
     while (nextIndex < this.steps.length) {
       const nextStep = this.steps[nextIndex];
@@ -113,24 +121,46 @@ nextStep() {
                            nextStep.hasAttribute('data-hide-if');
       const isHidden = nextStep.style.display === 'none';
       
+      if (this.options.debug) {
+        console.log('FinishFlow: Checking step', nextIndex, {
+          stepNumber: nextStep.getAttribute('data-form-step'),
+          isConditional,
+          isHidden,
+          display: nextStep.style.display
+        });
+      }
+      
       if (isConditional && isHidden) {
         // Überspringe diesen Step
         nextIndex++;
         
         if (this.options.debug) {
-          console.log('FinishFlow: Skipping conditional step', nextStep.getAttribute('data-form-step'));
+          console.log('FinishFlow: ⏭️ Skipping conditional step', nextStep.getAttribute('data-form-step'));
         }
       } else {
         // Dieser Step kann angezeigt werden
+        if (this.options.debug) {
+          console.log('FinishFlow: ✅ Found next visible step at index', nextIndex);
+        }
         break;
       }
     }
     
     if (nextIndex < this.steps.length) {
+      if (this.options.debug) {
+        console.log('FinishFlow: 🚀 Going to step', nextIndex);
+      }
       this.showStep(nextIndex);
     } else {
       // Kein nächster Step mehr - zeige Submit
+      if (this.options.debug) {
+        console.log('FinishFlow: No more steps - showing submit button');
+      }
       this.showSubmitButton();
+    }
+  } else {
+    if (this.options.debug) {
+      console.log('FinishFlow: ❌ Validation failed, staying on current step');
     }
   }
 }
@@ -369,59 +399,95 @@ setupAutoAdvance() {
 
 
   
-  evaluateConditionals() {
-    // Show-if Logik
-    const showIfElements = this.form.querySelectorAll('[data-show-if]');
+evaluateConditionals() {
+  // Show-if Logik
+  const showIfElements = this.form.querySelectorAll('[data-show-if]');
+  
+  if (this.options.debug) {
+    console.log('FinishFlow: Evaluating conditionals - found', showIfElements.length, 'elements');
+  }
+  
+  showIfElements.forEach(el => {
+    const condition = el.getAttribute('data-show-if');
+    const conditions = condition.split(',').map(c => c.trim());
+    let allMatch = true;
     
-    showIfElements.forEach(el => {
-      const condition = el.getAttribute('data-show-if');
-      const conditions = condition.split(',').map(c => c.trim());
-      let allMatch = true;
-      
-      conditions.forEach(cond => {
-        const [fieldName, expectedValue] = cond.split('=').map(s => s.trim());
-        const actualValue = this.formData[fieldName];
-        
-        if (actualValue != expectedValue) {
-          allMatch = false;
-        }
-      });
-      
-      if (allMatch) {
-        el.style.display = 'block';
-        // Wenn es ein Step ist, aktiviere ihn
-        if (el.hasAttribute('data-form-step')) {
-          el.removeAttribute('data-conditional-hidden');
-        }
-      } else {
-        el.style.display = 'none';
-        if (el.hasAttribute('data-form-step')) {
-          el.setAttribute('data-conditional-hidden', 'true');
-        }
-      }
-    });
-    
-    // Hide-if Logik (umgekehrte Bedingung)
-    const hideIfElements = this.form.querySelectorAll('[data-hide-if]');
-    
-    hideIfElements.forEach(el => {
-      const condition = el.getAttribute('data-hide-if');
-      const [fieldName, expectedValue] = condition.split('=').map(s => s.trim());
+    conditions.forEach(cond => {
+      const [fieldName, expectedValue] = cond.split('=').map(s => s.trim());
       const actualValue = this.formData[fieldName];
       
-      if (actualValue == expectedValue) {
-        el.style.display = 'none';
-        if (el.hasAttribute('data-form-step')) {
-          el.setAttribute('data-conditional-hidden', 'true');
-        }
-      } else {
-        el.style.display = 'block';
-        if (el.hasAttribute('data-form-step')) {
-          el.removeAttribute('data-conditional-hidden');
-        }
+      if (this.options.debug) {
+        console.log('FinishFlow: Checking condition:', {
+          condition: cond,
+          fieldName,
+          expectedValue,
+          actualValue,
+          matches: actualValue == expectedValue
+        });
+      }
+      
+      if (actualValue != expectedValue) {
+        allMatch = false;
       }
     });
+    
+    if (allMatch) {
+      el.style.display = 'block';
+      // Wenn es ein Step ist, aktiviere ihn
+      if (el.hasAttribute('data-form-step')) {
+        el.removeAttribute('data-conditional-hidden');
+        
+        if (this.options.debug) {
+          console.log('FinishFlow: ✅ SHOWING conditional step', el.getAttribute('data-form-step'));
+        }
+      }
+    } else {
+      el.style.display = 'none';
+      if (el.hasAttribute('data-form-step')) {
+        el.setAttribute('data-conditional-hidden', 'true');
+        
+        if (this.options.debug) {
+          console.log('FinishFlow: ❌ HIDING conditional step', el.getAttribute('data-form-step'));
+        }
+      }
+    }
+  });
+  
+  // Hide-if Logik (umgekehrte Bedingung)
+  const hideIfElements = this.form.querySelectorAll('[data-hide-if]');
+  
+  hideIfElements.forEach(el => {
+    const condition = el.getAttribute('data-hide-if');
+    const [fieldName, expectedValue] = condition.split('=').map(s => s.trim());
+    const actualValue = this.formData[fieldName];
+    
+    if (this.options.debug) {
+      console.log('FinishFlow: Checking hide-if:', {
+        fieldName,
+        expectedValue,
+        actualValue,
+        shouldHide: actualValue == expectedValue
+      });
+    }
+    
+    if (actualValue == expectedValue) {
+      el.style.display = 'none';
+      if (el.hasAttribute('data-form-step')) {
+        el.setAttribute('data-conditional-hidden', 'true');
+      }
+    } else {
+      el.style.display = 'block';
+      if (el.hasAttribute('data-form-step')) {
+        el.removeAttribute('data-conditional-hidden');
+      }
+    }
+  });
+  
+  if (this.options.debug) {
+    console.log('FinishFlow: Conditionals evaluation complete');
   }
+}
+
   
   captureStepData() {
     const currentStepElement = this.steps[this.currentStep];
