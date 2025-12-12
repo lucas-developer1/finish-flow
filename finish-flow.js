@@ -61,40 +61,59 @@ class FinishFlow {
     });
   }
   
-  showStep(stepIndex) {
-    this.hideAllSteps();
+showStep(stepIndex) {
+  if (this.options.debug) {
+    console.log('FinishFlow: showStep() called with index', stepIndex);
+  }
+  
+  // WICHTIG: Alle Steps explizit verstecken
+  this.steps.forEach((step, i) => {
+    step.style.display = 'none';
+    if (this.options.debug && i === stepIndex) {
+      console.log('FinishFlow: About to show step', i, step.getAttribute('data-form-step'));
+    }
+  });
+  
+  if (this.steps[stepIndex]) {
+    const step = this.steps[stepIndex];
+    step.style.display = 'block';
     
-    if (this.steps[stepIndex]) {
-      const step = this.steps[stepIndex];
-      step.style.display = 'block';
-      
-      // Animation
-      if (this.options.animations) {
-        step.style.animation = 'none';
-        setTimeout(() => {
-          step.style.animation = 'finishFlowFadeIn 0.3s ease-in';
-        }, 10);
-      }
-      
-      this.currentStep = stepIndex;
-      this.updateProgressIndicators();
-      this.saveProgress();
-      
-      // Scroll to top of form
-      if (stepIndex > 0) {
-        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      
-         // Focus first input in new step
+    if (this.options.debug) {
+      console.log('FinishFlow: Step', stepIndex, 'is now visible. Display:', window.getComputedStyle(step).display);
+    }
+    
+    // Animation
+    if (this.options.animations) {
+      step.style.animation = 'none';
+      setTimeout(() => {
+        step.style.animation = 'finishFlowFadeIn 0.3s ease-in';
+      }, 10);
+    }
+    
+    this.currentStep = stepIndex;
+    this.updateProgressIndicators();
+    this.saveProgress();
+    
+    // Scroll to top of form
+    if (stepIndex > 0) {
+      this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Focus first input in new step
     const firstInput = step.querySelector('input, select, textarea');
     if (firstInput && firstInput.type !== 'hidden') {
       setTimeout(() => firstInput.focus(), 100);
     }
     
     // Preload next step für bessere Performance  
-    this.preloadNextStep();                   
+    this.preloadNextStep();
+  } else {
+    if (this.options.debug) {
+      console.error('FinishFlow: Step at index', stepIndex, 'not found!');
+    }
   }
 }
+
 
   
 nextStep() {
