@@ -186,9 +186,19 @@ class FinishFlow {
         }, 10);
       }
       
-      if (this.state.currentStep > 0) {
-        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+// Scroll nur wenn Form nicht im Viewport ist
+if (this.state.currentStep > 0) {
+  const formRect = this.form.getBoundingClientRect();
+  const isInViewport = (
+    formRect.top >= 0 &&
+    formRect.top <= window.innerHeight * 0.3 // Obere 30% des Viewports
+  );
+  
+  if (!isInViewport) {
+    this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
       
       const firstInput = currentStep.querySelector('input:not([type="hidden"]), select, textarea');
       if (firstInput) {
