@@ -185,7 +185,22 @@ class FinishFlow {
           currentStep.style.animation = 'finishFlowFadeIn 0.25s ease-in';
         }, 10);
       }
+          // Intelligentes Scrollen: Nur auf Mobile UND nur wenn Form nicht sichtbar
+    if (this.state.currentStep > 0 && window.innerWidth < 768) {
+      const formRect = this.form.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
       
+      // Check ob Form komplett im Viewport ist
+      const isFullyVisible = (
+        formRect.top >= 0 &&
+        formRect.bottom <= windowHeight
+      );
+      
+      // Scroll nur wenn Form NICHT komplett sichtbar ist
+      if (!isFullyVisible) {
+        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
       
       const firstInput = currentStep.querySelector('input:not([type="hidden"]), select, textarea');
       if (firstInput) {
