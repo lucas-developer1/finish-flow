@@ -41,7 +41,13 @@ class FinishFlow {
       stepNumbers: this.form.querySelectorAll('[data-step-number]')
     };
     
-    this.storageKey = 'finish_flow_' + (this.form.id || 'form');
+// Generate unique storage key per form AND page
+const formId = this.form.id || 'form_' + Math.random().toString(36).substr(2, 9);
+const customKey = this.form.getAttribute('data-form-key');
+const pagePath = window.location.pathname.replace(/\//g, '_') || 'home';
+
+this.storageKey = 'finish_flow_' + (customKey || formId + '_' + pagePath);
+
     this.submissionMode = this.detectSubmissionMode();
     this.visibleSteps = [];
     
