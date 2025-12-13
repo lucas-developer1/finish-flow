@@ -292,16 +292,21 @@ setupResetButton() {
     }
   }
   
-  saveProgress() {
-    if (!this.config.saveProgress) return;
-    
-    const progressData = {
-      step: this.state.currentStep,
-      data: this.state.formData,
-      timestamp: Date.now(),
-      version: '2.0.0'
-    };
-    
+saveProgress() {
+  if (!this.config.saveProgress) return;
+  
+  // Get actual step element and its data-form-step value
+  const currentStepElement = this.visibleSteps[this.state.currentStep];
+  const stepId = currentStepElement ? currentStepElement.getAttribute('data-form-step') : '1';
+  
+  const progressData = {
+    stepId: stepId,  // ← RICHTIG: data-form-step Wert
+    step: this.state.currentStep,  // Keep for backwards compat
+    data: this.state.formData,
+    timestamp: Date.now(),
+    version: '2.0.0'
+  };
+
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(progressData));
     } catch (e) {
@@ -317,7 +322,6 @@ loadProgress() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('reset') === 'true') {
       this.clearProgress();
-      // Entferne ?reset=true aus URL (clean)
       window.history.replaceState({}, '', window.location.pathname);
       return false;
     }
@@ -325,11 +329,11 @@ loadProgress() {
     const saved = localStorage.getItem(this.storageKey);
     if (!saved) return false;
     
-    const { step, data, timestamp, version } = JSON.parse(saved);
+    const progressData = JSON.parse(saved);
+    const { stepId, step, data, timestamp, version } = progressData;
     
     // SAFETY CHECK 1: Version Check
     if (version !== '2.0.0') {
-      console.warn('⚠️ Old version detected, clearing progress');
       this.clearProgress();
       return false;
     }
@@ -342,20 +346,12 @@ loadProgress() {
     }
     
     // SAFETY CHECK 3: Data Integrity
-    if (typeof step !== 'number' || !data || typeof data !== 'object') {
-      console.warn('⚠️ Corrupted data detected, clearing progress');
+    if (!data || typeof data !== 'object') {
       this.clearProgress();
       return false;
     }
     
-    // SAFETY CHECK 4: Step Range Check
-    if (step < 0 || step >= this.elements.steps.length) {
-      console.warn('⚠️ Invalid step number, clearing progress');
-      this.clearProgress();
-      return false;
-    }
-    
-    // Optional: Confirm Restore (falls aktiviert)
+    // Optional: Confirm Restore
     if (this.config.confirmRestore) {
       if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
         this.clearProgress();
@@ -363,15 +359,37 @@ loadProgress() {
       }
     }
     
-    // Restore
-    this.state.currentStep = step;
+    // RESTORE: Find correct visible step index
+    let targetStepIndex = 0;
+    
+    if (stepId) {
+      // NEW FORMAT: Find step by data-form-step value
+      const stepElement = this.elements.steps.find(s => 
+        s.getAttribute('data-form-step') === stepId
+      );
+      
+      if (stepElement) {
+        // Check if it's in visible steps
+        targetStepIndex = this.visibleSteps.indexOf(stepElement);
+        
+        // If hidden by conditional logic, start at beginning
+        if (targetStepIndex === -1) {
+          targetStepIndex = 0;
+        }
+      }
+    } else if (typeof step === 'number') {
+      // OLD FORMAT: Fallback (might be inaccurate with conditionals)
+      targetStepIndex = Math.min(step, this.visibleSteps.length - 1);
+    }
+    
+    // Apply restore
+    this.state.currentStep = targetStepIndex;
     this.state.formData = data;
     this.restoreFormFields();
     
     return true;
     
   } catch (e) {
-    // Bei JEDEM Fehler: Safe Clear
     console.error('❌ Failed to load progress:', e);
     this.clearProgress();
     return false;
