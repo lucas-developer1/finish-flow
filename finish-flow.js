@@ -58,21 +58,43 @@ this.storageKey = 'finish_flow_' + (customKey || formId + '_' + pagePath);
     
     this.init();
   }
+
   
-  init() {
-    this.form.classList.add('finish-flow-initialized');
-    this.updateVisibility();
-    
-    const restored = this.loadProgress();
-    if (!restored) {
-      this.state.currentStep = 0;
-    }
-    
-    this.setupEventListeners();
-    this.setupAutoAdvance();
-    this.render();
-    this.state.initialized = true;
+init() {
+  this.form.classList.add('finish-flow-initialized');
+  this.updateVisibility();
+  
+  const restored = this.loadProgress();
+  if (!restored) {
+    this.state.currentStep = 0;
   }
+  
+  this.setupEventListeners();
+  this.setupAutoAdvance();
+  this.setupResetButton();  // ← NEU
+  this.render();
+  this.state.initialized = true;
+}
+
+// NEU: Reset Button Handler
+setupResetButton() {
+  const resetButtons = document.querySelectorAll('[data-form-reset]');
+  
+  resetButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      
+      // Optional: Confirm Dialog
+      if (confirm('Möchten Sie wirklich von vorne beginnen? Ihr Fortschritt geht verloren.')) {
+        this.reset();
+        
+        // Scroll to form top
+        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
   
   detectSubmissionMode() {
     if (this.form.hasAttribute('data-name') || this.form.classList.contains('w-form')) {
@@ -286,41 +308,80 @@ this.storageKey = 'finish_flow_' + (customKey || formId + '_' + pagePath);
       console.error('❌ Failed to save progress:', e);
     }
   }
+
+loadProgress() {
+  if (!this.config.saveProgress) return false;
   
-  loadProgress() {
-    if (!this.config.saveProgress) return false;
+  try {
+    // Check für URL Parameter Reset
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('reset') === 'true') {
+      this.clearProgress();
+      // Entferne ?reset=true aus URL (clean)
+      window.history.replaceState({}, '', window.location.pathname);
+      return false;
+    }
     
-    try {
-      const saved = localStorage.getItem(this.storageKey);
-      if (!saved) return false;
-      
-      const { step, data, timestamp } = JSON.parse(saved);
-      
-      const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
-      if (hoursAgo > this.config.progressExpiry) {
-        this.clearProgress();
-        return false;
-      }
-      
-      if (this.config.confirmRestore) {
-        if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
-          this.clearProgress();
-          return false;
-        }
-      }
-      
-      this.state.currentStep = step;
-      this.state.formData = data;
-      this.restoreFormFields();
-      
-      return true;
-      
-    } catch (e) {
-      console.error('❌ Failed to load progress:', e);
+    const saved = localStorage.getItem(this.storageKey);
+    if (!saved) return false;
+    
+    const { step, data, timestamp, version } = JSON.parse(saved);
+    
+    // SAFETY CHECK 1: Version Check
+    if (version !== '2.0.0') {
+      console.warn('⚠️ Old version detected, clearing progress');
       this.clearProgress();
       return false;
     }
+    
+    // SAFETY CHECK 2: Expiry Check (24 Stunden)
+    const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
+    if (hoursAgo > this.config.progressExpiry) {
+      this.clearProgress();
+      return false;
+    }
+    
+    // SAFETY CHECK 3: Data Integrity
+    if (typeof step !== 'number' || !data || typeof data !== 'object') {
+      console.warn('⚠️ Corrupted data detected, clearing progress');
+      this.clearProgress();
+      return false;
+    }
+    
+    // SAFETY CHECK 4: Step Range Check
+    if (step < 0 || step >= this.elements.steps.length) {
+      console.warn('⚠️ Invalid step number, clearing progress');
+      this.clearProgress();
+      return false;
+    }
+    
+    // Optional: Confirm Restore (falls aktiviert)
+    if (this.config.confirmRestore) {
+      if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
+        this.clearProgress();
+        return false;
+      }
+    }
+    
+    // Restore
+    this.state.currentStep = step;
+    this.state.formData = data;
+    this.restoreFormFields();
+    
+    return true;
+    
+  } catch (e) {
+    // Bei JEDEM Fehler: Safe Clear
+    console.error('❌ Failed to load progress:', e);
+    this.clearProgress();
+    return false;
   }
+}
+
+
+
+
+
   
   restoreFormFields() {
     Object.entries(this.state.formData).forEach(([name, value]) => {
