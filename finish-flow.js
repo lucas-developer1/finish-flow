@@ -52,22 +52,21 @@ class FinishFlow {
     
     this.init();
   }
-
+  
   init() {
-  this.form.classList.add('finish-flow-initialized');
-  this.updateVisibility();
-  
-  const restored = this.loadProgress();
-  if (!restored) {
-    this.state.currentStep = 0;
+    this.form.classList.add('finish-flow-initialized');
+    this.updateVisibility();
+    
+    const restored = this.loadProgress();
+    if (!restored) {
+      this.state.currentStep = 0;
+    }
+    
+    this.setupEventListeners();
+    this.setupAutoAdvance();
+    this.render();
+    this.state.initialized = true;
   }
-  
-  this.setupEventListeners();
-  this.setupAutoAdvance();
-  this.render();
-  this.state.initialized = true;
-}
-
   
   detectSubmissionMode() {
     if (this.form.hasAttribute('data-name') || this.form.classList.contains('w-form')) {
@@ -186,22 +185,7 @@ class FinishFlow {
           currentStep.style.animation = 'finishFlowFadeIn 0.25s ease-in';
         }, 10);
       }
-          // Intelligentes Scrollen: Nur auf Mobile UND nur wenn Form nicht sichtbar
-    if (this.state.currentStep > 0 && window.innerWidth < 768) {
-      const formRect = this.form.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
       
-      // Check ob Form komplett im Viewport ist
-      const isFullyVisible = (
-        formRect.top >= 0 &&
-        formRect.bottom <= windowHeight
-      );
-      
-      // Scroll nur wenn Form NICHT komplett sichtbar ist
-      if (!isFullyVisible) {
-        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
       
       const firstInput = currentStep.querySelector('input:not([type="hidden"]), select, textarea');
       if (firstInput) {
@@ -265,22 +249,15 @@ class FinishFlow {
     }
   }
   
-saveProgress() {
-  if (!this.config.saveProgress) return;
-  
-  // Save BOTH: index AND step attribute
-  const currentStepElement = this.visibleSteps[this.state.currentStep];
-  const stepAttr = currentStepElement ? currentStepElement.getAttribute('data-form-step') : null;
-  
-  const progressData = {
-    step: this.state.currentStep,
-    stepAttr: stepAttr,  // ← NEU: Speichere auch das Attribut
-    data: this.state.formData,
-    timestamp: Date.now(),
-    version: '2.0.0'
-  };
-
-
+  saveProgress() {
+    if (!this.config.saveProgress) return;
+    
+    const progressData = {
+      step: this.state.currentStep,
+      data: this.state.formData,
+      timestamp: Date.now(),
+      version: '2.0.0'
+    };
     
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(progressData));
@@ -289,64 +266,40 @@ saveProgress() {
     }
   }
   
-loadProgress() {
-  if (!this.config.saveProgress) return false;
-  
-  try {
-    const saved = localStorage.getItem(this.storageKey);
-    if (!saved) return false;
+  loadProgress() {
+    if (!this.config.saveProgress) return false;
     
-    const progressData = JSON.parse(saved);
-    const { stepId, step, data, timestamp, version } = progressData;
-    
-    // Check expiry
-    const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
-    if (hoursAgo > this.config.progressExpiry) {
-      this.clearProgress();
-      return false;
-    }
-    
-    // Optional confirm
-    if (this.config.confirmRestore) {
-      if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
+    try {
+      const saved = localStorage.getItem(this.storageKey);
+      if (!saved) return false;
+      
+      const { step, data, timestamp } = JSON.parse(saved);
+      
+      const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
+      if (hoursAgo > this.config.progressExpiry) {
         this.clearProgress();
         return false;
       }
+      
+      if (this.config.confirmRestore) {
+        if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
+          this.clearProgress();
+          return false;
+        }
+      }
+      
+      this.state.currentStep = step;
+      this.state.formData = data;
+      this.restoreFormFields();
+      
+      return true;
+      
+    } catch (e) {
+      console.error('❌ Failed to load progress:', e);
+      this.clearProgress();
+      return false;
     }
-    
- // Restore formData first
-this.state.formData = data;
-this.restoreFormFields();
-
-// If we have stepAttr, try to find it in current visibleSteps
-const { stepAttr } = progressData;
-
-if (stepAttr) {
-  const stepElement = this.visibleSteps.find(s => 
-    s.getAttribute('data-form-step') === stepAttr
-  );
-  
-  if (stepElement) {
-    this.state.currentStep = this.visibleSteps.indexOf(stepElement);
-  } else {
-    // Fallback to saved index
-    this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
   }
-} else {
-  // Old format: just use index
-  this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
-}
-
-return true;
-
-    
-  } catch (e) {
-    console.error('❌ Failed to load progress:', e);
-    this.clearProgress();
-    return false;
-  }
-}
-
   
   restoreFormFields() {
     Object.entries(this.state.formData).forEach(([name, value]) => {
