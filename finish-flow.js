@@ -54,38 +54,22 @@ class FinishFlow {
   }
   
  init() {
-  console.log('=== INIT START ===');
-  console.log('Form ID:', this.form.id);
-  console.log('Total steps:', this.elements.steps.length);
-  
   this.form.classList.add('finish-flow-initialized');
   
-  console.log('--- CALLING updateVisibility ---');
+  // Initial visibility update (without restored data)
   this.updateVisibility();
-  console.log('Visible steps after updateVisibility:', this.visibleSteps.length);
-  console.log('Visible steps:', this.visibleSteps.map(s => s.getAttribute('data-form-step')));
   
-  console.log('--- CALLING loadProgress ---');
+  // Load progress (will call updateVisibility AGAIN with restored data)
   const restored = this.loadProgress();
-  console.log('loadProgress returned:', restored);
-  console.log('currentStep after loadProgress:', this.state.currentStep);
   
   if (!restored) {
-    console.log('Nothing restored, setting to 0');
     this.state.currentStep = 0;
   }
   
-  console.log('Final currentStep:', this.state.currentStep);
-  console.log('Final visibleSteps:', this.visibleSteps.map(s => s.getAttribute('data-form-step')));
-  
   this.setupEventListeners();
   this.setupAutoAdvance();
-  
-  console.log('--- CALLING render ---');
   this.render();
-  
   this.state.initialized = true;
-  console.log('=== INIT COMPLETE ===\n');
 }
 
   
@@ -304,33 +288,17 @@ saveProgress() {
 
   
 loadProgress() {
-  if (!this.config.saveProgress) {
-    console.log('saveProgress disabled');
-    return false;
-  }
-  
-  console.log('--- LOAD PROGRESS START ---');
+  if (!this.config.saveProgress) return false;
   
   try {
     const saved = localStorage.getItem(this.storageKey);
-    console.log('Storage key:', this.storageKey);
-    console.log('Saved data:', saved);
-    
-    if (!saved) {
-      console.log('No saved data');
-      return false;
-    }
+    if (!saved) return false;
     
     const progressData = JSON.parse(saved);
-    console.log('Parsed data:', progressData);
-    
-    const { step, data, timestamp } = progressData;
+    const { step, stepAttr, data, timestamp } = progressData;
     
     const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
-    console.log('Hours ago:', hoursAgo);
-    
     if (hoursAgo > this.config.progressExpiry) {
-      console.log('Progress expired');
       this.clearProgress();
       return false;
     }
@@ -342,22 +310,32 @@ loadProgress() {
       }
     }
     
-    console.log('Restoring...');
-    console.log('Saved step (index):', step);
-    console.log('Saved formData:', data);
-    console.log('Current visibleSteps:', this.visibleSteps.length);
-    console.log('Current visibleSteps IDs:', this.visibleSteps.map(s => s.getAttribute('data-form-step')));
-    
-    this.state.currentStep = step;
-    console.log('Set currentStep to:', step);
-    
+    // PHASE 1: Restore formData and fields
     this.state.formData = data;
-    console.log('Set formData');
-    
     this.restoreFormFields();
-    console.log('Restored form fields');
     
-    console.log('--- LOAD PROGRESS END ---');
+    // PHASE 2: Update visibility WITH restored data
+    // This is CRITICAL for conditional steps!
+    this.updateVisibility();
+    
+    // PHASE 3: Find correct step
+    if (stepAttr) {
+      // Find step by attribute value
+      const targetStep = this.visibleSteps.find(s => 
+        s.getAttribute('data-form-step') === stepAttr
+      );
+      
+      if (targetStep) {
+        this.state.currentStep = this.visibleSteps.indexOf(targetStep);
+      } else {
+        // Step not found (maybe conditional hidden), fallback
+        this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
+      }
+    } else {
+      // Old format: use index
+      this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
+    }
+    
     return true;
     
   } catch (e) {
@@ -366,6 +344,7 @@ loadProgress() {
     return false;
   }
 }
+
 
   restoreFormFields() {
     Object.entries(this.state.formData).forEach(([name, value]) => {
