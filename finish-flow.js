@@ -53,21 +53,18 @@ class FinishFlow {
     this.init();
   }
   
- init() {
+init() {
   this.form.classList.add('finish-flow-initialized');
-  
-  // Initial visibility update (without restored data)
   this.updateVisibility();
   
-  // Load progress (will call updateVisibility AGAIN with restored data)
   const restored = this.loadProgress();
-  
   if (!restored) {
     this.state.currentStep = 0;
   }
   
   this.setupEventListeners();
   this.setupAutoAdvance();
+  this.setupResetButton();  // ← NEU
   this.render();
   this.state.initialized = true;
 }
@@ -239,6 +236,25 @@ class FinishFlow {
       });
     });
   }
+
+setupResetButton() {
+  const resetButtons = document.querySelectorAll('[data-form-reset]');
+  
+  resetButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      
+      if (confirm('Möchten Sie wirklich von vorne beginnen? Ihr Fortschritt geht verloren.')) {
+        this.reset();
+        
+        // Optional: Scroll to form top
+        this.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
+
   
   addVisualFeedback(element) {
     const container = element.closest('label') || element.parentElement;
@@ -291,18 +307,43 @@ loadProgress() {
   if (!this.config.saveProgress) return false;
   
   try {
+    // Check für URL Parameter Reset
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('reset') === 'true') {
+      this.clearProgress();
+      // Remove ?reset=true from URL
+      window.history.replaceState({}, '', window.location.pathname);
+      return false;
+    }
+    
     const saved = localStorage.getItem(this.storageKey);
     if (!saved) return false;
     
     const progressData = JSON.parse(saved);
-    const { step, stepAttr, data, timestamp } = progressData;
+    const { step, stepAttr, data, timestamp, version } = progressData;
     
+    // SAFETY CHECK 1: Version Check
+    if (version && version !== '2.0.0') {
+      console.warn('⚠️ Old version detected, clearing progress');
+      this.clearProgress();
+      return false;
+    }
+    
+    // SAFETY CHECK 2: Expiry Check (24 Stunden)
     const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
     if (hoursAgo > this.config.progressExpiry) {
       this.clearProgress();
       return false;
     }
     
+    // SAFETY CHECK 3: Data Integrity
+    if (!data || typeof data !== 'object') {
+      console.warn('⚠️ Corrupted data detected, clearing progress');
+      this.clearProgress();
+      return false;
+    }
+    
+    // Optional: Confirm Restore
     if (this.config.confirmRestore) {
       if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
         this.clearProgress();
@@ -315,12 +356,10 @@ loadProgress() {
     this.restoreFormFields();
     
     // PHASE 2: Update visibility WITH restored data
-    // This is CRITICAL for conditional steps!
     this.updateVisibility();
     
     // PHASE 3: Find correct step
     if (stepAttr) {
-      // Find step by attribute value
       const targetStep = this.visibleSteps.find(s => 
         s.getAttribute('data-form-step') === stepAttr
       );
@@ -328,11 +367,9 @@ loadProgress() {
       if (targetStep) {
         this.state.currentStep = this.visibleSteps.indexOf(targetStep);
       } else {
-        // Step not found (maybe conditional hidden), fallback
         this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
       }
     } else {
-      // Old format: use index
       this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
     }
     
