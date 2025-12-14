@@ -52,27 +52,22 @@ class FinishFlow {
     
     this.init();
   }
-  
-init() {
+
+  init() {
   this.form.classList.add('finish-flow-initialized');
-  
-  // ERST Progress laden (restored formData)
-  const restored = this.loadProgress();
-  
-  // DANN Visibility updaten (mit restored Daten!)
   this.updateVisibility();
   
-  // Falls nichts restored wurde
+  const restored = this.loadProgress();
   if (!restored) {
     this.state.currentStep = 0;
   }
+  
+  this.setupEventListeners();
+  this.setupAutoAdvance();
+  this.render();
+  this.state.initialized = true;
+}
 
-    
-    this.setupEventListeners();
-    this.setupAutoAdvance();
-    this.render();
-    this.state.initialized = true;
-  }
   
   detectSubmissionMode() {
     if (this.form.hasAttribute('data-name') || this.form.classList.contains('w-form')) {
@@ -273,17 +268,18 @@ init() {
 saveProgress() {
   if (!this.config.saveProgress) return;
   
-  // Get the actual step element and its data-form-step attribute
+  // Save BOTH: index AND step attribute
   const currentStepElement = this.visibleSteps[this.state.currentStep];
-  const stepId = currentStepElement ? currentStepElement.getAttribute('data-form-step') : '1';
+  const stepAttr = currentStepElement ? currentStepElement.getAttribute('data-form-step') : null;
   
   const progressData = {
-    stepId: stepId,  // ← ATTRIBUTE VALUE (z.B. "2a")
-    step: this.state.currentStep,  // Keep for debugging
+    step: this.state.currentStep,
+    stepAttr: stepAttr,  // ← NEU: Speichere auch das Attribut
     data: this.state.formData,
     timestamp: Date.now(),
     version: '2.0.0'
   };
+
 
     
     try {
@@ -318,39 +314,31 @@ loadProgress() {
       }
     }
     
-    // PHASE 1: Restore formData and fields FIRST
-    // This is critical for conditional logic to work
-    this.state.formData = data;
-    this.restoreFormFields();
-    
-    // PHASE 2: Find correct step
-    if (stepId) {
-      // NEW: Find step by data-form-step attribute
-      const stepElement = this.elements.steps.find(s => 
-        s.getAttribute('data-form-step') === stepId
-      );
-      
-      if (stepElement) {
-        // Find position in CURRENT visibleSteps (after formData restore)
-        const stepIndex = this.visibleSteps.indexOf(stepElement);
-        
-        if (stepIndex !== -1) {
-          // Step is visible
-          this.state.currentStep = stepIndex;
-        } else {
-          // Step exists but is hidden by conditional logic
-          this.state.currentStep = 0;
-        }
-      } else {
-        // Step doesn't exist
-        this.state.currentStep = 0;
-      }
-    } else {
-      // OLD FORMAT: Fallback for backwards compatibility
-      this.state.currentStep = Math.min(step || 0, this.visibleSteps.length - 1);
-    }
-    
-    return true;
+ // Restore formData first
+this.state.formData = data;
+this.restoreFormFields();
+
+// If we have stepAttr, try to find it in current visibleSteps
+const { stepAttr } = progressData;
+
+if (stepAttr) {
+  const stepElement = this.visibleSteps.find(s => 
+    s.getAttribute('data-form-step') === stepAttr
+  );
+  
+  if (stepElement) {
+    this.state.currentStep = this.visibleSteps.indexOf(stepElement);
+  } else {
+    // Fallback to saved index
+    this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
+  }
+} else {
+  // Old format: just use index
+  this.state.currentStep = Math.min(step, this.visibleSteps.length - 1);
+}
+
+return true;
+
     
   } catch (e) {
     console.error('❌ Failed to load progress:', e);
