@@ -62,16 +62,21 @@ this.storageKey = 'finish_flow_' + (customKey || formId + '_' + pagePath);
   
 init() {
   this.form.classList.add('finish-flow-initialized');
+  
+  // Load progress FIRST (restores formData and fields)
+  const restored = this.loadProgress();
+  
+  // NOW update visibility with restored data
   this.updateVisibility();
   
-  const restored = this.loadProgress();
+  // If nothing was restored, start at 0
   if (!restored) {
     this.state.currentStep = 0;
   }
   
   this.setupEventListeners();
   this.setupAutoAdvance();
-  this.setupResetButton();  // ← NEU
+  this.setupResetButton();
   this.render();
   this.state.initialized = true;
 }
@@ -382,12 +387,13 @@ loadProgress() {
       targetStepIndex = Math.min(step, this.visibleSteps.length - 1);
     }
     
-    // Apply restore
-    this.state.currentStep = targetStepIndex;
+    // Apply restore - WICHTIG: FormData zuerst!
     this.state.formData = data;
     this.restoreFormFields();
+    this.state.currentStep = targetStepIndex;
     
     return true;
+
     
   } catch (e) {
     console.error('❌ Failed to load progress:', e);
