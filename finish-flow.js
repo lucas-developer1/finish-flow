@@ -53,20 +53,41 @@ class FinishFlow {
     this.init();
   }
   
-  init() {
-    this.form.classList.add('finish-flow-initialized');
-    this.updateVisibility();
-    
-    const restored = this.loadProgress();
-    if (!restored) {
-      this.state.currentStep = 0;
-    }
-    
-    this.setupEventListeners();
-    this.setupAutoAdvance();
-    this.render();
-    this.state.initialized = true;
+ init() {
+  console.log('=== INIT START ===');
+  console.log('Form ID:', this.form.id);
+  console.log('Total steps:', this.elements.steps.length);
+  
+  this.form.classList.add('finish-flow-initialized');
+  
+  console.log('--- CALLING updateVisibility ---');
+  this.updateVisibility();
+  console.log('Visible steps after updateVisibility:', this.visibleSteps.length);
+  console.log('Visible steps:', this.visibleSteps.map(s => s.getAttribute('data-form-step')));
+  
+  console.log('--- CALLING loadProgress ---');
+  const restored = this.loadProgress();
+  console.log('loadProgress returned:', restored);
+  console.log('currentStep after loadProgress:', this.state.currentStep);
+  
+  if (!restored) {
+    console.log('Nothing restored, setting to 0');
+    this.state.currentStep = 0;
   }
+  
+  console.log('Final currentStep:', this.state.currentStep);
+  console.log('Final visibleSteps:', this.visibleSteps.map(s => s.getAttribute('data-form-step')));
+  
+  this.setupEventListeners();
+  this.setupAutoAdvance();
+  
+  console.log('--- CALLING render ---');
+  this.render();
+  
+  this.state.initialized = true;
+  console.log('=== INIT COMPLETE ===\n');
+}
+
   
   detectSubmissionMode() {
     if (this.form.hasAttribute('data-name') || this.form.classList.contains('w-form')) {
@@ -249,58 +270,103 @@ class FinishFlow {
     }
   }
   
-  saveProgress() {
-    if (!this.config.saveProgress) return;
-    
-    const progressData = {
-      step: this.state.currentStep,
-      data: this.state.formData,
-      timestamp: Date.now(),
-      version: '2.0.0'
-    };
-    
-    try {
-      localStorage.setItem(this.storageKey, JSON.stringify(progressData));
-    } catch (e) {
-      console.error('❌ Failed to save progress:', e);
-    }
+saveProgress() {
+  if (!this.config.saveProgress) return;
+  
+  console.log('--- SAVE PROGRESS ---');
+  console.log('currentStep (index):', this.state.currentStep);
+  console.log('visibleSteps count:', this.visibleSteps.length);
+  
+  const currentStepElement = this.visibleSteps[this.state.currentStep];
+  const stepAttr = currentStepElement ? currentStepElement.getAttribute('data-form-step') : null;
+  
+  console.log('Current step element:', currentStepElement);
+  console.log('Step attribute:', stepAttr);
+  console.log('formData:', this.state.formData);
+  
+  const progressData = {
+    step: this.state.currentStep,
+    stepAttr: stepAttr,
+    data: this.state.formData,
+    timestamp: Date.now(),
+    version: '2.0.0'
+  };
+  
+  console.log('Saving:', progressData);
+  
+  try {
+    localStorage.setItem(this.storageKey, JSON.stringify(progressData));
+    console.log('✅ Saved to localStorage');
+  } catch (e) {
+    console.error('❌ Failed to save progress:', e);
+  }
+}
+
+  
+loadProgress() {
+  if (!this.config.saveProgress) {
+    console.log('saveProgress disabled');
+    return false;
   }
   
-  loadProgress() {
-    if (!this.config.saveProgress) return false;
+  console.log('--- LOAD PROGRESS START ---');
+  
+  try {
+    const saved = localStorage.getItem(this.storageKey);
+    console.log('Storage key:', this.storageKey);
+    console.log('Saved data:', saved);
     
-    try {
-      const saved = localStorage.getItem(this.storageKey);
-      if (!saved) return false;
-      
-      const { step, data, timestamp } = JSON.parse(saved);
-      
-      const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
-      if (hoursAgo > this.config.progressExpiry) {
-        this.clearProgress();
-        return false;
-      }
-      
-      if (this.config.confirmRestore) {
-        if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
-          this.clearProgress();
-          return false;
-        }
-      }
-      
-      this.state.currentStep = step;
-      this.state.formData = data;
-      this.restoreFormFields();
-      
-      return true;
-      
-    } catch (e) {
-      console.error('❌ Failed to load progress:', e);
+    if (!saved) {
+      console.log('No saved data');
+      return false;
+    }
+    
+    const progressData = JSON.parse(saved);
+    console.log('Parsed data:', progressData);
+    
+    const { step, data, timestamp } = progressData;
+    
+    const hoursAgo = (Date.now() - timestamp) / 1000 / 60 / 60;
+    console.log('Hours ago:', hoursAgo);
+    
+    if (hoursAgo > this.config.progressExpiry) {
+      console.log('Progress expired');
       this.clearProgress();
       return false;
     }
+    
+    if (this.config.confirmRestore) {
+      if (!confirm('Möchten Sie mit Ihrem gespeicherten Fortschritt fortfahren?')) {
+        this.clearProgress();
+        return false;
+      }
+    }
+    
+    console.log('Restoring...');
+    console.log('Saved step (index):', step);
+    console.log('Saved formData:', data);
+    console.log('Current visibleSteps:', this.visibleSteps.length);
+    console.log('Current visibleSteps IDs:', this.visibleSteps.map(s => s.getAttribute('data-form-step')));
+    
+    this.state.currentStep = step;
+    console.log('Set currentStep to:', step);
+    
+    this.state.formData = data;
+    console.log('Set formData');
+    
+    this.restoreFormFields();
+    console.log('Restored form fields');
+    
+    console.log('--- LOAD PROGRESS END ---');
+    return true;
+    
+  } catch (e) {
+    console.error('❌ Failed to load progress:', e);
+    this.clearProgress();
+    return false;
   }
-  
+}
+
   restoreFormFields() {
     Object.entries(this.state.formData).forEach(([name, value]) => {
       const fields = this.form.querySelectorAll(`[name="${name}"]`);
