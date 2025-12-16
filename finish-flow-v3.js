@@ -1,5 +1,5 @@
 /**
- * Finish Flow v3.0.0 - Smart Multi-Step Form System for Webflow
+ * Finish Flow v3.1.1 - Smart Multi-Step Form System for Webflow
  * NEW: A/B Testing Support
  * Backwards Compatible with v2.0
  * Author: Your Name
@@ -728,27 +728,41 @@ prevStep() {
     return isValid;
   }
   
-  updateProgressIndicators() {
-    if (this.elements.progressBar) {
-      const progress = ((this.state.currentStep + 1) / this.visibleSteps.length) * 100;
-      this.elements.progressBar.style.width = progress + '%';
-    }
-    
-    if (this.elements.stepIndicator) {
-      this.elements.stepIndicator.textContent = 
-        `Schritt ${this.state.currentStep + 1} von ${this.visibleSteps.length}`;
-    }
-    
-    this.elements.stepNumbers.forEach((num, index) => {
-      num.classList.remove('active', 'completed');
-      
-      if (index === this.state.currentStep) {
-        num.classList.add('active');
-      } else if (index < this.state.currentStep) {
-        num.classList.add('completed');
-      }
-    });
+updateProgressIndicators() {
+  const totalSteps = this.visibleSteps.length;
+  const currentStepNumber = this.state.currentStep + 1;
+  const progress = (currentStepNumber / totalSteps) * 100;
+  
+  // ✅ NEU: Progress Bar (beide Systeme unterstützen)
+  // System 1: Standard Finish Flow (data-progress-bar)
+  if (this.elements.progressBar) {
+    this.elements.progressBar.style.width = progress + '%';
   }
+  
+  // System 2: Custom Finish Flow (data-progress-bar-finish)
+  const customProgressBar = document.querySelector('[data-progress-bar-finish]');
+  if (customProgressBar) {
+    customProgressBar.style.width = progress + '%';
+    customProgressBar.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+  }
+  
+  // Step Indicator
+  if (this.elements.stepIndicator) {
+    this.elements.stepIndicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
+  }
+  
+  // Step Numbers
+  this.elements.stepNumbers.forEach((num, index) => {
+    num.classList.remove('active', 'completed');
+    
+    if (index === this.state.currentStep) {
+      num.classList.add('active');
+    } else if (index < this.state.currentStep) {
+      num.classList.add('completed');
+    }
+  });
+}
+
   
   setupEventListeners() {
     this.elements.nextButtons.forEach(btn => {
