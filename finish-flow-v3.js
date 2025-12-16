@@ -733,25 +733,41 @@ updateProgressIndicators() {
   const currentStepNumber = this.state.currentStep + 1;
   const progress = (currentStepNumber / totalSteps) * 100;
   
-  // ✅ NEU: Progress Bar (beide Systeme unterstützen)
-  // System 1: Standard Finish Flow (data-progress-bar)
+  // ===== SYSTEM 1: Standard Finish Flow (data-progress-bar) =====
   if (this.elements.progressBar) {
     this.elements.progressBar.style.width = progress + '%';
   }
   
-  // System 2: Custom Finish Flow (data-progress-bar-finish)
-  const customProgressBar = document.querySelector('[data-progress-bar-finish]');
-  if (customProgressBar) {
-    customProgressBar.style.width = progress + '%';
-    customProgressBar.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+  // ===== SYSTEM 2: Custom Finish Flow (data-progress-bar-finish) =====
+  // ✅ NEU: Findet ALLE Progress Bars (auch die in versteckten Steps)
+  const allCustomProgressBars = document.querySelectorAll('[data-progress-bar-finish]');
+  
+  if (allCustomProgressBars.length > 0) {
+    allCustomProgressBars.forEach(bar => {
+      bar.style.width = progress + '%';
+      bar.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+    });
+    
+    // Debug Log (optional)
+    if (this.config.debug) {
+      console.log(`📊 ${allCustomProgressBars.length} Progress Bars updated:`, progress + '%', `(${currentStepNumber}/${totalSteps})`);
+    }
   }
   
-  // Step Indicator
+  // ===== Step Indicator Text =====
   if (this.elements.stepIndicator) {
     this.elements.stepIndicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
   }
   
-  // Step Numbers
+  // ===== Step Indicator Text (alle Instanzen) =====
+  const allStepIndicators = document.querySelectorAll('[data-step-indicator]');
+  if (allStepIndicators.length > 0) {
+    allStepIndicators.forEach(indicator => {
+      indicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
+    });
+  }
+  
+  // ===== Step Numbers (Dots/Circles) =====
   this.elements.stepNumbers.forEach((num, index) => {
     num.classList.remove('active', 'completed');
     
@@ -762,6 +778,7 @@ updateProgressIndicators() {
     }
   });
 }
+
 
   
   setupEventListeners() {
