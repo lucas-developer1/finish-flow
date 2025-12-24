@@ -1105,5 +1105,5 @@ document.addEventListener('DOMContentLoaded', function() {
     new FinishFlow('#' + form.id);
   });
   
-  console.log('✅ Finish Flow v3.0.0 loaded');
+  console.log('✅');
 });
