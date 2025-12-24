@@ -492,40 +492,62 @@ prevStep() {
   }
   
   setupAutoAdvance() {
-    const autoAdvanceSteps = this.form.querySelectorAll('[data-auto-advance="true"]');
+  const autoAdvanceSteps = this.form.querySelectorAll('[data-auto-advance="true"]');
+  
+  autoAdvanceSteps.forEach(step => {
+    // Skip if hidden by A/B Test
+    if (step.hasAttribute('data-ab-hidden')) {
+      return;
+    }
     
-    autoAdvanceSteps.forEach(step => {
-      // Skip if hidden by A/B Test
-      if (step.hasAttribute('data-ab-hidden')) {
-        return;
-      }
+    const radios = step.querySelectorAll('input[type="radio"]');
+    const selects = step.querySelectorAll('select');
+    
+    // ===== RADIO BUTTONS: Click + Change =====
+    radios.forEach(radio => {
       
-      const radios = step.querySelectorAll('input[type="radio"]');
-      const selects = step.querySelectorAll('select');
+      // CHANGE Event (für normale Auswahl)
+      radio.addEventListener('change', () => {
+        this.addVisualFeedback(radio);
+        
+        setTimeout(() => {
+          this.captureFormData();
+          this.updateVisibility();
+          this.nextStep();
+        }, this.config.autoAdvanceDelay);
+      }, true);
       
-      radios.forEach(radio => {
-        radio.addEventListener('change', () => {
+      // ===== NEU: CLICK Event (für bereits selected Radio) =====
+      radio.addEventListener('click', (e) => {
+        // Nur wenn Radio bereits checked war
+        if (radio.checked) {
+          console.log('🔘 Radio bereits selected, trigger Auto-Advance');
+          
           this.addVisualFeedback(radio);
           
           setTimeout(() => {
-            this.captureStepData();
+            this.captureFormData();
             this.updateVisibility();
             this.nextStep();
           }, this.config.autoAdvanceDelay);
-        }, true);
+        }
       });
       
-      selects.forEach(select => {
-        select.addEventListener('change', () => {
-          setTimeout(() => {
-            this.captureStepData();
-            this.updateVisibility();
-            this.nextStep();
-          }, this.config.autoAdvanceDelay + 50);
-        });
+    });
+    
+    // ===== SELECT DROPDOWNS =====
+    selects.forEach(select => {
+      select.addEventListener('change', () => {
+        setTimeout(() => {
+          this.captureFormData();
+          this.updateVisibility();
+          this.nextStep();
+        }, this.config.autoAdvanceDelay + 50);
       });
     });
-  }
+  });
+}
+
   
   addVisualFeedback(element) {
     const container = element.closest('label') || element.parentElement;
