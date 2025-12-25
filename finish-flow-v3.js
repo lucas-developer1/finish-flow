@@ -492,73 +492,75 @@ prevStep() {
   }
   
 setupAutoAdvance() {
-  const finishFlowInstance = this; // Korrekter 'this' Kontext
+  const finishFlowInstance = this;
   
-  // Auto-Advance für Radio Buttons
-  const autoAdvanceRadios = this.form.querySelectorAll('input[type="radio"][data-auto-advance="true"]');
+  // ✅ KORREKT: Suche nach Steps mit data-auto-advance="true"
+  const autoAdvanceSteps = this.form.querySelectorAll('[data-form-step][data-auto-advance="true"]');
   
   console.log('🔄 Auto-Advance Setup:', {
-    radios: autoAdvanceRadios.length
+    steps: autoAdvanceSteps.length
   });
   
-  autoAdvanceRadios.forEach(radio => {
-    // Speichere Zustand VOR dem Klick
-    let wasChecked = false;
+  // Iteriere über alle Auto-Advance Steps
+  autoAdvanceSteps.forEach(step => {
+    // Finde alle Radio-Buttons in diesem Step
+    const radios = step.querySelectorAll('input[type="radio"]');
     
-    // Mousedown: Erfasse ob Radio bereits selected war
-    radio.addEventListener('mousedown', function() {
-      wasChecked = this.checked;
-      console.log('👆 Radio mousedown:', this.value, '| War checked:', wasChecked);
-    });
+    console.log(`📍 Step ${step.getAttribute('data-form-step')}: ${radios.length} Radios`);
     
-    // Click: Funktioniert für NEUE Auswahl UND Re-Click
-    radio.addEventListener('click', function() {
-      console.log('🔘 Radio clicked:', this.value, '| War checked:', wasChecked);
+    radios.forEach(radio => {
+      let wasChecked = false;
       
-      // Visuelle Rückmeldung: Entferne Auswahl von allen Radios in dieser Gruppe
-      const allRadiosInGroup = finishFlowInstance.form.querySelectorAll(`input[name="${this.name}"]`);
-      allRadiosInGroup.forEach(r => {
-        const label = finishFlowInstance.findLabelForInput(r);
-        if (label) label.classList.remove('finish-flow-selected');
+      // Mousedown: Erfasse ob Radio bereits selected war
+      radio.addEventListener('mousedown', function() {
+        wasChecked = this.checked;
+        console.log('👆 Radio mousedown:', this.value, '| War checked:', wasChecked);
       });
       
-      // Füge Auswahl-Klasse zum aktuellen Radio hinzu
-      const currentLabel = finishFlowInstance.findLabelForInput(this);
-      if (currentLabel) currentLabel.classList.add('finish-flow-selected');
-      
-      // Auto-Advance: Daten erfassen und zum nächsten Schritt
-      setTimeout(() => {
-        // ✅ NUR captureStepData() - nextStep() macht den Rest!
-        if (typeof finishFlowInstance.captureStepData === 'function') {
-          finishFlowInstance.captureStepData();
-        } else {
-          console.error('❌ captureStepData ist keine Funktion!');
-        }
+      // Click: Funktioniert für NEUE Auswahl UND Re-Click
+      radio.addEventListener('click', function() {
+        console.log('🔘 Radio clicked:', this.value, '| War checked:', wasChecked);
         
-        // ❌ ENTFERNT: finishFlowInstance.updateVisibility();
-        // ↑ Das macht nextStep() bereits!
+        // Visuelle Rückmeldung: Entferne Auswahl von allen Radios in dieser Gruppe
+        const allRadiosInGroup = finishFlowInstance.form.querySelectorAll(`input[name="${this.name}"]`);
+        allRadiosInGroup.forEach(r => {
+          const label = finishFlowInstance.findLabelForInput(r);
+          if (label) label.classList.remove('finish-flow-selected');
+        });
         
-        // ✅ Nur nextStep() aufrufen
-        finishFlowInstance.nextStep();
-      }, finishFlowInstance.config.autoAdvanceDelay);
+        // Füge Auswahl-Klasse zum aktuellen Radio hinzu
+        const currentLabel = finishFlowInstance.findLabelForInput(this);
+        if (currentLabel) currentLabel.classList.add('finish-flow-selected');
+        
+        // Auto-Advance: Daten erfassen und zum nächsten Schritt
+        setTimeout(() => {
+          if (typeof finishFlowInstance.captureStepData === 'function') {
+            finishFlowInstance.captureStepData();
+          } else {
+            console.error('❌ captureStepData ist keine Funktion!');
+          }
+          
+          finishFlowInstance.nextStep();
+        }, finishFlowInstance.config.autoAdvanceDelay);
+      });
     });
-  });
-  
-  // Auto-Advance für Select Dropdowns
-  const autoAdvanceSelects = this.form.querySelectorAll('select[data-auto-advance="true"]');
-  
-  autoAdvanceSelects.forEach(select => {
-    select.addEventListener('change', function() {
-      console.log('📋 Select Auto-Advance:', this.name, '=', this.value);
-      
-      setTimeout(() => {
-        finishFlowInstance.captureStepData();
-        // ❌ ENTFERNT: finishFlowInstance.updateVisibility();
-        finishFlowInstance.nextStep();
-      }, finishFlowInstance.config.autoAdvanceDelay);
+    
+    // Auto-Advance für Select Dropdowns in diesem Step
+    const selects = step.querySelectorAll('select');
+    
+    selects.forEach(select => {
+      select.addEventListener('change', function() {
+        console.log('📋 Select Auto-Advance:', this.name, '=', this.value);
+        
+        setTimeout(() => {
+          finishFlowInstance.captureStepData();
+          finishFlowInstance.nextStep();
+        }, finishFlowInstance.config.autoAdvanceDelay);
+      });
     });
   });
 }
+
 
 
   findLabelForInput(input) {
