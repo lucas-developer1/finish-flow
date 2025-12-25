@@ -494,64 +494,39 @@ prevStep() {
 setupAutoAdvance() {
   const finishFlowInstance = this;
   
-  // ✅ KORREKT: Suche nach Steps mit data-auto-advance="true"
   const autoAdvanceSteps = this.form.querySelectorAll('[data-form-step][data-auto-advance="true"]');
   
-  console.log('🔄 Auto-Advance Setup:', {
-    steps: autoAdvanceSteps.length
-  });
-  
-  // Iteriere über alle Auto-Advance Steps
   autoAdvanceSteps.forEach(step => {
-    // Finde alle Radio-Buttons in diesem Step
     const radios = step.querySelectorAll('input[type="radio"]');
-    
-    console.log(`📍 Step ${step.getAttribute('data-form-step')}: ${radios.length} Radios`);
     
     radios.forEach(radio => {
       let wasChecked = false;
       
-      // Mousedown: Erfasse ob Radio bereits selected war
       radio.addEventListener('mousedown', function() {
         wasChecked = this.checked;
-        console.log('👆 Radio mousedown:', this.value, '| War checked:', wasChecked);
       });
       
-      // Click: Funktioniert für NEUE Auswahl UND Re-Click
       radio.addEventListener('click', function() {
-        console.log('🔘 Radio clicked:', this.value, '| War checked:', wasChecked);
-        
-        // Visuelle Rückmeldung: Entferne Auswahl von allen Radios in dieser Gruppe
         const allRadiosInGroup = finishFlowInstance.form.querySelectorAll(`input[name="${this.name}"]`);
         allRadiosInGroup.forEach(r => {
           const label = finishFlowInstance.findLabelForInput(r);
           if (label) label.classList.remove('finish-flow-selected');
         });
         
-        // Füge Auswahl-Klasse zum aktuellen Radio hinzu
         const currentLabel = finishFlowInstance.findLabelForInput(this);
         if (currentLabel) currentLabel.classList.add('finish-flow-selected');
         
-        // Auto-Advance: Daten erfassen und zum nächsten Schritt
         setTimeout(() => {
-          if (typeof finishFlowInstance.captureStepData === 'function') {
-            finishFlowInstance.captureStepData();
-          } else {
-            console.error('❌ captureStepData ist keine Funktion!');
-          }
-          
+          finishFlowInstance.captureStepData();
           finishFlowInstance.nextStep();
         }, finishFlowInstance.config.autoAdvanceDelay);
       });
     });
     
-    // Auto-Advance für Select Dropdowns in diesem Step
     const selects = step.querySelectorAll('select');
     
     selects.forEach(select => {
       select.addEventListener('change', function() {
-        console.log('📋 Select Auto-Advance:', this.name, '=', this.value);
-        
         setTimeout(() => {
           finishFlowInstance.captureStepData();
           finishFlowInstance.nextStep();
@@ -560,6 +535,7 @@ setupAutoAdvance() {
     });
   });
 }
+
 
 
 
