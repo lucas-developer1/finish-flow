@@ -528,14 +528,17 @@ setupAutoAdvance() {
       
       // Auto-Advance: Daten erfassen und zum nächsten Schritt
       setTimeout(() => {
-        // ✅ KORREKTER METHODENNAME:
+        // ✅ NUR captureStepData() - nextStep() macht den Rest!
         if (typeof finishFlowInstance.captureStepData === 'function') {
           finishFlowInstance.captureStepData();
         } else {
           console.error('❌ captureStepData ist keine Funktion!');
         }
         
-        finishFlowInstance.updateVisibility();
+        // ❌ ENTFERNT: finishFlowInstance.updateVisibility();
+        // ↑ Das macht nextStep() bereits!
+        
+        // ✅ Nur nextStep() aufrufen
         finishFlowInstance.nextStep();
       }, finishFlowInstance.config.autoAdvanceDelay);
     });
@@ -550,12 +553,36 @@ setupAutoAdvance() {
       
       setTimeout(() => {
         finishFlowInstance.captureStepData();
-        finishFlowInstance.updateVisibility();
+        // ❌ ENTFERNT: finishFlowInstance.updateVisibility();
         finishFlowInstance.nextStep();
       }, finishFlowInstance.config.autoAdvanceDelay);
     });
   });
 }
+
+
+  findLabelForInput(input) {
+  // 1) Input innerhalb von <label>
+  const parentLabel = input.closest('label');
+  if (parentLabel) return parentLabel;
+  
+  // 2) Label mit for="input-id"
+  if (input.id) {
+    const linkedLabel = this.form.querySelector(`label[for="${input.id}"]`);
+    if (linkedLabel) return linkedLabel;
+  }
+  
+  // 3) Label als nächstes Geschwisterelement
+  const nextLabel = input.nextElementSibling;
+  if (nextLabel && nextLabel.tagName === 'LABEL') return nextLabel;
+  
+  // 4) Webflow's .w-radio Wrapper
+  const parent = input.parentElement;
+  if (parent && parent.classList.contains('w-radio')) return parent;
+  
+  return parent;
+}
+
 
 
   
