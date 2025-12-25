@@ -491,7 +491,7 @@ prevStep() {
     }
   }
   
-  setupAutoAdvance() {
+setupAutoAdvance() {
   const autoAdvanceSteps = this.form.querySelectorAll('[data-auto-advance="true"]');
   
   autoAdvanceSteps.forEach(step => {
@@ -503,46 +503,47 @@ prevStep() {
     const radios = step.querySelectorAll('input[type="radio"]');
     const selects = step.querySelectorAll('select');
     
-    // ===== RADIO BUTTONS: Click + Change =====
+    // ===== RADIO BUTTONS =====
     radios.forEach(radio => {
       
-      // CHANGE Event (für normale Auswahl)
-      radio.addEventListener('change', () => {
-        this.addVisualFeedback(radio);
-        
-        setTimeout(() => {
-          this.captureFormData();
-          this.updateVisibility();
-          this.nextStep();
-        }, this.config.autoAdvanceDelay);
-      }, true);
+      // Speichere "this" Referenz (FinishFlow instance)
+      const self = this;
       
-      // ===== NEU: CLICK Event (für bereits selected Radio) =====
-      radio.addEventListener('click', (e) => {
-        // Nur wenn Radio bereits checked war
-        if (radio.checked) {
-          console.log('🔘 Radio bereits selected, trigger Auto-Advance');
-          
-          this.addVisualFeedback(radio);
-          
-          setTimeout(() => {
-            this.captureFormData();
-            this.updateVisibility();
-            this.nextStep();
-          }, this.config.autoAdvanceDelay);
-        }
+      // Track ob Radio vor Click bereits checked war
+      let wasCheckedBefore = false;
+      
+      // MOUSEDOWN: Status vor Click merken
+      radio.addEventListener('mousedown', function() {
+        wasCheckedBefore = this.checked;
+      });
+      
+      // CLICK: Auto-Advance triggern (für neue Auswahl UND Re-Click)
+      radio.addEventListener('click', function() {
+        console.log('🔘 Radio clicked:', this.value, '| War checked:', wasCheckedBefore);
+        
+        // Visual Feedback
+        self.addVisualFeedback(this);
+        
+        // Auto-Advance
+        setTimeout(() => {
+          self.captureFormData();
+          self.updateVisibility();
+          self.nextStep();
+        }, self.config.autoAdvanceDelay);
       });
       
     });
     
     // ===== SELECT DROPDOWNS =====
     selects.forEach(select => {
-      select.addEventListener('change', () => {
+      const self = this;
+      
+      select.addEventListener('change', function() {
         setTimeout(() => {
-          this.captureFormData();
-          this.updateVisibility();
-          this.nextStep();
-        }, this.config.autoAdvanceDelay + 50);
+          self.captureFormData();
+          self.updateVisibility();
+          self.nextStep();
+        }, self.config.autoAdvanceDelay + 50);
       });
     });
   });
