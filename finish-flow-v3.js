@@ -492,9 +492,9 @@ prevStep() {
   }
   
 setupAutoAdvance() {
-  const finishFlowInstance = this; // Preserve correct 'this' context
+  const finishFlowInstance = this; // Korrekter 'this' Kontext
   
-  // Auto-advance for Radio Buttons
+  // Auto-Advance für Radio Buttons
   const autoAdvanceRadios = this.form.querySelectorAll('input[type="radio"][data-auto-advance="true"]');
   
   console.log('🔄 Auto-Advance Setup:', {
@@ -502,37 +502,37 @@ setupAutoAdvance() {
   });
   
   autoAdvanceRadios.forEach(radio => {
-    // Track if radio was already checked before click
+    // Speichere Zustand VOR dem Klick
     let wasChecked = false;
     
-    // Detect mousedown to capture state BEFORE click changes it
+    // Mousedown: Erfasse ob Radio bereits selected war
     radio.addEventListener('mousedown', function() {
       wasChecked = this.checked;
-      console.log('👆 Radio mousedown:', this.value, '| Was checked:', wasChecked);
+      console.log('👆 Radio mousedown:', this.value, '| War checked:', wasChecked);
     });
     
-    // Handle actual click (works for both NEW selection and RE-CLICK)
+    // Click: Funktioniert für NEUE Auswahl UND Re-Click
     radio.addEventListener('click', function() {
-      console.log('🔘 Radio clicked:', this.value, '| Was checked:', wasChecked);
+      console.log('🔘 Radio clicked:', this.value, '| War checked:', wasChecked);
       
-      // Visual feedback: Remove selection from all radios in this group
+      // Visuelle Rückmeldung: Entferne Auswahl von allen Radios in dieser Gruppe
       const allRadiosInGroup = finishFlowInstance.form.querySelectorAll(`input[name="${this.name}"]`);
       allRadiosInGroup.forEach(r => {
         const label = finishFlowInstance.findLabelForInput(r);
         if (label) label.classList.remove('finish-flow-selected');
       });
       
-      // Add selection class to current radio's label
+      // Füge Auswahl-Klasse zum aktuellen Radio hinzu
       const currentLabel = finishFlowInstance.findLabelForInput(this);
       if (currentLabel) currentLabel.classList.add('finish-flow-selected');
       
-      // Auto-advance: Capture data and move to next step
+      // Auto-Advance: Daten erfassen und zum nächsten Schritt
       setTimeout(() => {
-        // ✅ CORRECT METHOD NAME:
+        // ✅ KORREKTER METHODENNAME:
         if (typeof finishFlowInstance.captureStepData === 'function') {
           finishFlowInstance.captureStepData();
         } else {
-          console.error('❌ captureStepData is not a function!');
+          console.error('❌ captureStepData ist keine Funktion!');
         }
         
         finishFlowInstance.updateVisibility();
@@ -541,7 +541,7 @@ setupAutoAdvance() {
     });
   });
   
-  // Auto-advance for Select Dropdowns
+  // Auto-Advance für Select Dropdowns
   const autoAdvanceSelects = this.form.querySelectorAll('select[data-auto-advance="true"]');
   
   autoAdvanceSelects.forEach(select => {
@@ -555,29 +555,6 @@ setupAutoAdvance() {
       }, finishFlowInstance.config.autoAdvanceDelay);
     });
   });
-}
-
-// Helper function to find label for input (various HTML structures)
-findLabelForInput(input) {
-  // 1) Input inside <label>
-  const parentLabel = input.closest('label');
-  if (parentLabel) return parentLabel;
-  
-  // 2) Label with for="input-id"
-  if (input.id) {
-    const linkedLabel = this.form.querySelector(`label[for="${input.id}"]`);
-    if (linkedLabel) return linkedLabel;
-  }
-  
-  // 3) Label as next sibling
-  const nextLabel = input.nextElementSibling;
-  if (nextLabel && nextLabel.tagName === 'LABEL') return nextLabel;
-  
-  // 4) Webflow's .w-radio wrapper
-  const parent = input.parentElement;
-  if (parent && parent.classList.contains('w-radio')) return parent;
-  
-  return parent;
 }
 
 
