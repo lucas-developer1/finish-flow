@@ -1,6 +1,6 @@
 /**
  * Finish Flow v3.2.0 - Smart Multi-Step Form System for Webflow
- * NEW v3.2: finish_track Integration (Steps, A/B Tests, Meta CAPI)
+ * NEW v3.2: finish_track Integration (Steps, A/B Tests)
  * NEW v3.1: URL Step Tracking, Custom Button IDs
  * NEW v3.0: A/B Testing Support
  * Backwards Compatible with v2.0
@@ -32,18 +32,17 @@ class FinishFlow {
       // NEW v3.2: finish_track Integration
       tracking: {
         enabled: true,
-        funnelId: null, // Auto-detect from form.id if null
+        funnelId: null,
         trackSteps: true,
         trackABTest: true,
         trackAutoAdvance: true,
         trackBackButton: true,
-        trackFormSubmit: true,
+        trackFormSubmit: true
       },
       
       ...options
     };
     
-    // Auto-detect funnel ID from form.id if not provided
     if (this.config.tracking.enabled && !this.config.tracking.funnelId) {
       this.config.tracking.funnelId = this.form.id || 'finish_flow_form';
     }
@@ -83,10 +82,6 @@ class FinishFlow {
     this.init();
   }
   
-  // ============================================
-  // INITIALIZATION
-  // ============================================
-  
   init() {
     this.form.classList.add('finish-flow-initialized');
     
@@ -102,8 +97,6 @@ class FinishFlow {
     this.setupAutoAdvance();
     this.render();
     this.updateURL();
-    
-    // Track initial step
     this.trackStep();
     
     this.state.initialized = true;
@@ -115,10 +108,6 @@ class FinishFlow {
       });
     }
   }
-  
-  // ============================================
-  // A/B TESTING MODULE
-  // ============================================
   
   initABTest() {
     const testName = this.form.getAttribute('data-ab-test');
@@ -169,7 +158,6 @@ class FinishFlow {
     this.form.setAttribute('data-ab-variant', this.abTest.variant);
     document.body.setAttribute('data-ab-variant', this.abTest.variant);
     
-    // NEW v3.2: Track A/B Test Assignment
     if (this.config.tracking.enabled && this.config.tracking.trackABTest) {
       this.trackABTest();
     }
@@ -290,10 +278,6 @@ class FinishFlow {
     });
   }
   
-  // ============================================
-  // URL STEP TRACKING
-  // ============================================
-  
   updateURL() {
     if (!this.config.updateURL) return;
     
@@ -331,10 +315,6 @@ class FinishFlow {
     }
   }
   
-  // ============================================
-  // FINISH_TRACK INTEGRATION (NEW v3.2)
-  // ============================================
-  
   trackStep() {
     if (!this.config.tracking.enabled || !this.config.tracking.trackSteps) return;
     if (typeof FinishTrack === 'undefined') return;
@@ -359,7 +339,6 @@ class FinishFlow {
         stepId: stepId
       });
     }
-  
   }
   
   trackABTest() {
@@ -444,24 +423,6 @@ class FinishFlow {
       });
     }
   }
-  
-
-    // finish_track CAPI
-    if (typeof FinishTrack !== 'undefined' && typeof FinishTrack.trackMetaEvent === 'function') {
-      await FinishTrack.trackMetaEvent(this.config.tracking.metaCAPI.eventType, {
-        eventID: eventID,
-        email: emailField.value
-      });
-      
-      if (this.config.debug) {
-        console.log('📊 finish_track CAPI: Lead Event', eventID);
-      }
-    }
-  }
-  
-  // ============================================
-  // CORE FUNCTIONS
-  // ============================================
   
   detectSubmissionMode() {
     if (this.form.hasAttribute('data-name') || this.form.classList.contains('w-form')) {
@@ -650,10 +611,7 @@ class FinishFlow {
           
           setTimeout(() => {
             finishFlowInstance.captureStepData();
-            
-            // NEW v3.2: Track Auto-Advance
             finishFlowInstance.trackAutoAdvance('radio', this.name, this.value);
-            
             finishFlowInstance.nextStep();
           }, finishFlowInstance.config.autoAdvanceDelay);
         });
@@ -665,10 +623,7 @@ class FinishFlow {
         select.addEventListener('change', function() {
           setTimeout(() => {
             finishFlowInstance.captureStepData();
-            
-            // NEW v3.2: Track Auto-Advance
             finishFlowInstance.trackAutoAdvance('select', this.name, this.value);
-            
             finishFlowInstance.nextStep();
           }, finishFlowInstance.config.autoAdvanceDelay);
         });
@@ -692,20 +647,6 @@ class FinishFlow {
     if (parent && parent.classList.contains('w-radio')) return parent;
     
     return parent;
-  }
-  
-  addVisualFeedback(element) {
-    const container = element.closest('label') || element.parentElement;
-    if (container) {
-      container.classList.add('finish-flow-selected');
-      
-      const siblings = container.parentElement?.querySelectorAll('.finish-flow-selected');
-      siblings?.forEach(sibling => {
-        if (sibling !== container) {
-          sibling.classList.remove('finish-flow-selected');
-        }
-      });
-    }
   }
   
   saveProgress() {
@@ -971,10 +912,7 @@ class FinishFlow {
     e.preventDefault();
     
     this.captureStepData();
-    
-    // NEW v3.2: Track Form Submit
     this.trackFormSubmit();
-    
     this.clearProgress();
     
     if (this.submissionMode === 'webflow') {
@@ -1055,10 +993,6 @@ class FinishFlow {
       timeout = setTimeout(later, wait);
     };
   }
-  
-  // ============================================
-  // PUBLIC API
-  // ============================================
   
   goToStep(stepNumber) {
     if (stepNumber >= 0 && stepNumber < this.visibleSteps.length) {
@@ -1163,10 +1097,6 @@ class FinishFlow {
   }
 }
 
-// ============================================
-// GLOBAL HELPER FUNCTIONS
-// ============================================
-
 window.FinishFlow = FinishFlow;
 
 window.FinishFlow.getVariant = function(testName) {
@@ -1221,10 +1151,6 @@ window.FinishFlow.resetVariant = function(testName) {
   
   console.log(`✅ Variant reset: ${testName} (reload page to get new variant)`);
 };
-
-// ============================================
-// AUTO-INITIALIZATION
-// ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
   const autoInitForms = document.querySelectorAll('[data-finish-flow][data-auto-init]');
