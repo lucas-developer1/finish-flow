@@ -1,8 +1,10 @@
 /**
- * Finish Flow v3.1.1 - Smart Multi-Step Form System for Webflow
- * NEW: A/B Testing Support
+ * Finish Flow v3.2.0 - Smart Multi-Step Form System for Webflow
+ * NEW v3.2: finish_track Integration (Steps, A/B Tests, Meta CAPI)
+ * NEW v3.1: URL Step Tracking, Custom Button IDs
+ * NEW v3.0: A/B Testing Support
  * Backwards Compatible with v2.0
- * Author: Your Name
+ * Author: Finish Media
  * License: MIT
  */
 
@@ -15,34 +17,54 @@ class FinishFlow {
       return;
     }
     
-this.config = {
-  autoSaveDelay: 500,
-  autoAdvanceDelay: 100,
-  progressExpiry: 24,
-  confirmRestore: false,
-  saveProgress: true,
-  animations: true,
-  debug: false,
-  onSubmit: null,
-  updateURL: true, // ← NEU: URL Step Tracking
-  // A/B Testing Config
-  abSplit: [50, 50], // A, B percentages (or [33, 33, 34] for A/B/C)
-  ...options
-};
-
+    this.config = {
+      autoSaveDelay: 500,
+      autoAdvanceDelay: 100,
+      progressExpiry: 24,
+      confirmRestore: false,
+      saveProgress: true,
+      animations: true,
+      debug: false,
+      onSubmit: null,
+      updateURL: true,
+      abSplit: [50, 50],
+      
+      // NEW v3.2: finish_track Integration
+      tracking: {
+        enabled: true,
+        funnelId: null, // Auto-detect from form.id if null
+        trackSteps: true,
+        trackABTest: true,
+        trackAutoAdvance: true,
+        trackBackButton: true,
+        trackFormSubmit: true,
+        metaCAPI: {
+          enabled: false,
+          eventType: 'lead',
+          triggerOnStep: null // Step number (1-based) where email is captured
+        }
+      },
+      
+      ...options
+    };
+    
+    // Auto-detect funnel ID from form.id if not provided
+    if (this.config.tracking.enabled && !this.config.tracking.funnelId) {
+      this.config.tracking.funnelId = this.form.id || 'finish_flow_form';
+    }
     
     this.state = {
       currentStep: 0,
       formData: {},
-      initialized: false
+      initialized: false,
+      startTime: Date.now()
     };
     
-    // A/B Testing State
     this.abTest = {
       enabled: false,
       testName: null,
       variant: null,
-      variants: [] // ['A', 'B'] or ['A', 'B', 'C']
+      variants: []
     };
     
     this.elements = {
@@ -73,10 +95,7 @@ this.config = {
   init() {
     this.form.classList.add('finish-flow-initialized');
     
-    // NEW V3: Check for A/B Testing
     this.initABTest();
-    
-    // Original V2 init flow
     this.updateVisibility();
     
     const restored = this.loadProgress();
@@ -84,36 +103,38 @@ this.config = {
       this.state.currentStep = 0;
     }
     
-this.setupEventListeners();
-this.setupAutoAdvance();
-this.render();
-this.updateURL(); // ← NEU
-this.state.initialized = true;
-
-if (this.config.debug) {
-  console.log('✅ FinishFlow v3.1 initialized', {
-    abTest: this.abTest.enabled ? `${this.abTest.testName} (${this.abTest.variant})` : 'disabled'
-  });
-}
+    this.setupEventListeners();
+    this.setupAutoAdvance();
+    this.render();
+    this.updateURL();
+    
+    // Track initial step
+    this.trackStep();
+    
+    this.state.initialized = true;
+    
+    if (this.config.debug) {
+      console.log('✅ FinishFlow v3.2 initialized', {
+        abTest: this.abTest.enabled ? `${this.abTest.testName} (${this.abTest.variant})` : 'disabled',
+        tracking: this.config.tracking.enabled ? this.config.tracking.funnelId : 'disabled'
+      });
+    }
   }
   
   // ============================================
-  // A/B TESTING MODULE (NEW V3)
+  // A/B TESTING MODULE
   // ============================================
   
   initABTest() {
-    // Check if A/B Test is enabled
     const testName = this.form.getAttribute('data-ab-test');
     
     if (!testName) {
-      // No A/B Test - skip all A/B logic
       return;
     }
     
     this.abTest.enabled = true;
     this.abTest.testName = testName;
     
-    // Detect available variants from form
     this.detectVariants();
     
     if (this.abTest.variants.length === 0) {
@@ -122,7 +143,6 @@ if (this.config.debug) {
       return;
     }
     
-    // 1. Check URL Parameter (highest priority)
     const urlVariant = this.getURLVariant();
     
     if (urlVariant && this.abTest.variants.includes(urlVariant)) {
@@ -133,11 +153,9 @@ if (this.config.debug) {
         console.log('🔗 A/B Test: URL forced variant:', urlVariant);
       }
     } else {
-      // 2. Check saved variant (Cookie/LocalStorage)
       this.abTest.variant = this.loadVariant();
       
       if (!this.abTest.variant || !this.abTest.variants.includes(this.abTest.variant)) {
-        // 3. Assign new variant
         this.abTest.variant = this.assignVariant();
         this.saveVariant();
         
@@ -151,16 +169,18 @@ if (this.config.debug) {
       }
     }
     
-    // Apply variant (hide non-matching elements)
     this.applyVariant();
     
-    // Set data attribute on form for external tracking
     this.form.setAttribute('data-ab-variant', this.abTest.variant);
     document.body.setAttribute('data-ab-variant', this.abTest.variant);
+    
+    // NEW v3.2: Track A/B Test Assignment
+    if (this.config.tracking.enabled && this.config.tracking.trackABTest) {
+      this.trackABTest();
+    }
   }
   
   detectVariants() {
-    // Find all unique variants in form
     const variantElements = this.form.querySelectorAll('[data-variant]');
     const variantsSet = new Set();
     
@@ -183,25 +203,20 @@ if (this.config.debug) {
   }
   
   assignVariant() {
-    // Support A/B or A/B/C/D testing
     const variants = this.abTest.variants;
     const splits = this.config.abSplit;
     
-    // Normalize splits to percentages
     let normalizedSplits = splits;
     const sum = splits.reduce((a, b) => a + b, 0);
     
     if (sum !== 100) {
-      // Auto-normalize if not 100
       normalizedSplits = splits.map(s => (s / sum) * 100);
     }
     
-    // Ensure we have enough splits for variants
     while (normalizedSplits.length < variants.length) {
       normalizedSplits.push(100 / variants.length);
     }
     
-    // Roll the dice
     const random = Math.random() * 100;
     let cumulative = 0;
     
@@ -212,7 +227,6 @@ if (this.config.debug) {
       }
     }
     
-    // Fallback (should never happen)
     return variants[0];
   }
   
@@ -222,14 +236,12 @@ if (this.config.debug) {
     const key = `ab_${this.abTest.testName}`;
     const value = this.abTest.variant;
     
-    // Save to Cookie (30 days)
     try {
       document.cookie = `${key}=${value}; max-age=${30*24*60*60}; path=/; SameSite=Lax`;
     } catch (e) {
       console.warn('⚠️ Could not set cookie:', e);
     }
     
-    // Save to LocalStorage (fallback)
     try {
       localStorage.setItem(key, value);
     } catch (e) {
@@ -242,7 +254,6 @@ if (this.config.debug) {
     
     const key = `ab_${this.abTest.testName}`;
     
-    // Try Cookie first
     try {
       const cookies = document.cookie.split('; ');
       const cookie = cookies.find(row => row.startsWith(key + '='));
@@ -254,7 +265,6 @@ if (this.config.debug) {
       console.warn('⚠️ Could not read cookie:', e);
     }
     
-    // Fallback to LocalStorage
     try {
       return localStorage.getItem(key);
     } catch (e) {
@@ -267,77 +277,216 @@ if (this.config.debug) {
   applyVariant() {
     if (!this.abTest.enabled) return;
     
-    // Find all elements with data-variant
     const variantElements = this.form.querySelectorAll('[data-variant]');
     
     variantElements.forEach(el => {
       const elVariant = el.getAttribute('data-variant').toUpperCase();
       
       if (elVariant !== this.abTest.variant) {
-        // Wrong variant - hide it
         el.style.display = 'none';
         el.setAttribute('data-ab-hidden', 'true');
         
-        // If it's a step, mark as conditional hidden
         if (el.hasAttribute('data-form-step')) {
           el.setAttribute('data-conditional-hidden', 'true');
         }
       } else {
-        // Correct variant - ensure it's not hidden by A/B
         el.removeAttribute('data-ab-hidden');
       }
     });
   }
-
-// ============================================
-// V3.1: URL STEP TRACKING
-// ============================================
-
-updateURL() {
-  if (!this.config.updateURL) return;
-  
-  const currentStepElement = this.visibleSteps[this.state.currentStep];
-  if (!currentStepElement) return;
-  
-  // Priority: data-step-id > data-form-step
-  const stepId = currentStepElement.getAttribute('data-step-id') 
-              || currentStepElement.getAttribute('data-form-step');
-  
-  if (!stepId) return;
-  
-  // Update URL without page reload
-  const urlParams = new URLSearchParams(window.location.search);
-  urlParams.set('step', stepId);
-  
-  const newUrl = window.location.pathname + '?' + urlParams.toString();
-  
-  // Use replaceState to avoid browser history pollution
-  window.history.replaceState(
-    { step: stepId }, 
-    '', 
-    newUrl
-  );
-  
-  // Trigger custom event for external tracking
-  window.dispatchEvent(new CustomEvent('finishflow:step', {
-    detail: {
-      stepId: stepId,
-      stepIndex: this.state.currentStep,
-      totalSteps: this.visibleSteps.length,
-      variant: this.abTest.variant,
-      formData: this.state.formData
-    }
-  }));
-  
-  if (this.config.debug) {
-    console.log('🔗 URL updated:', stepId);
-  }
-}
-
-
   
   // ============================================
-  // ORIGINAL V2 FUNCTIONS (unchanged)
+  // URL STEP TRACKING
+  // ============================================
+  
+  updateURL() {
+    if (!this.config.updateURL) return;
+    
+    const currentStepElement = this.visibleSteps[this.state.currentStep];
+    if (!currentStepElement) return;
+    
+    const stepId = currentStepElement.getAttribute('data-step-id') 
+                || currentStepElement.getAttribute('data-form-step');
+    
+    if (!stepId) return;
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('step', stepId);
+    
+    const newUrl = window.location.pathname + '?' + urlParams.toString();
+    
+    window.history.replaceState(
+      { step: stepId }, 
+      '', 
+      newUrl
+    );
+    
+    window.dispatchEvent(new CustomEvent('finishflow:step', {
+      detail: {
+        stepId: stepId,
+        stepIndex: this.state.currentStep,
+        totalSteps: this.visibleSteps.length,
+        variant: this.abTest.variant,
+        formData: this.state.formData
+      }
+    }));
+    
+    if (this.config.debug) {
+      console.log('🔗 URL updated:', stepId);
+    }
+  }
+  
+  // ============================================
+  // FINISH_TRACK INTEGRATION (NEW v3.2)
+  // ============================================
+  
+  trackStep() {
+    if (!this.config.tracking.enabled || !this.config.tracking.trackSteps) return;
+    if (typeof FinishTrack === 'undefined') return;
+    
+    const currentStepElement = this.visibleSteps[this.state.currentStep];
+    if (!currentStepElement) return;
+    
+    const stepId = currentStepElement.getAttribute('data-step-id') 
+                || currentStepElement.getAttribute('data-form-step');
+    
+    FinishTrack.step(
+      this.config.tracking.funnelId,
+      this.state.currentStep + 1,
+      stepId,
+      this.visibleSteps.length
+    );
+    
+    if (this.config.debug) {
+      console.log('📊 finish_track: step_viewed', {
+        funnel: this.config.tracking.funnelId,
+        step: this.state.currentStep + 1,
+        stepId: stepId
+      });
+    }
+    
+    // Meta CAPI Lead Event (if email step reached)
+    if (this.config.tracking.metaCAPI?.enabled && 
+        this.config.tracking.metaCAPI.triggerOnStep === this.state.currentStep + 1) {
+      this.trackMetaLeadEvent();
+    }
+  }
+  
+  trackABTest() {
+    if (!this.abTest.enabled) return;
+    if (typeof FinishTrack === 'undefined') return;
+    
+    FinishTrack.experiment(
+      this.abTest.testName,
+      this.abTest.variant
+    );
+    
+    if (this.config.debug) {
+      console.log('📊 finish_track: experiment_viewed', {
+        test: this.abTest.testName,
+        variant: this.abTest.variant
+      });
+    }
+  }
+  
+  trackAutoAdvance(inputType, fieldName, fieldValue) {
+    if (!this.config.tracking.enabled || !this.config.tracking.trackAutoAdvance) return;
+    if (typeof FinishTrack === 'undefined') return;
+    
+    const currentStepElement = this.visibleSteps[this.state.currentStep];
+    const stepId = currentStepElement?.getAttribute('data-step-id') 
+                || currentStepElement?.getAttribute('data-form-step');
+    
+    FinishTrack.track('auto_advance_triggered', {
+      input_type: inputType,
+      field_name: fieldName,
+      field_value: fieldValue,
+      step_id: stepId,
+      funnel_id: this.config.tracking.funnelId
+    });
+    
+    if (this.config.debug) {
+      console.log('📊 finish_track: auto_advance_triggered', {
+        type: inputType,
+        field: fieldName,
+        value: fieldValue
+      });
+    }
+  }
+  
+  trackBackButton(fromStep, toStep) {
+    if (!this.config.tracking.enabled || !this.config.tracking.trackBackButton) return;
+    if (typeof FinishTrack === 'undefined') return;
+    
+    FinishTrack.track('step_back_clicked', {
+      from_step: fromStep,
+      to_step: toStep,
+      funnel_id: this.config.tracking.funnelId
+    });
+    
+    if (this.config.debug) {
+      console.log('📊 finish_track: step_back_clicked', {
+        from: fromStep,
+        to: toStep
+      });
+    }
+  }
+  
+  trackFormSubmit() {
+    if (!this.config.tracking.enabled || !this.config.tracking.trackFormSubmit) return;
+    if (typeof FinishTrack === 'undefined') return;
+    
+    const completionTime = Date.now() - this.state.startTime;
+    
+    FinishTrack.track('form_submitted', {
+      form_id: this.form.id,
+      funnel_id: this.config.tracking.funnelId,
+      total_steps: this.visibleSteps.length,
+      completion_time_seconds: Math.round(completionTime / 1000),
+      ab_variant: this.abTest.variant || null
+    });
+    
+    if (this.config.debug) {
+      console.log('📊 finish_track: form_submitted', {
+        form: this.form.id,
+        time: Math.round(completionTime / 1000) + 's',
+        variant: this.abTest.variant
+      });
+    }
+  }
+  
+  async trackMetaLeadEvent() {
+    if (!this.config.tracking.metaCAPI?.enabled) return;
+    
+    const emailField = this.form.querySelector('input[type="email"]');
+    if (!emailField || !emailField.value) return;
+    
+    const eventID = crypto.randomUUID();
+    
+    // Meta Pixel (falls vorhanden)
+    if (typeof fbq !== 'undefined') {
+      fbq('track', 'Lead', {}, {eventID: eventID});
+      
+      if (this.config.debug) {
+        console.log('📊 Meta Pixel: Lead Event', eventID);
+      }
+    }
+    
+    // finish_track CAPI
+    if (typeof FinishTrack !== 'undefined' && typeof FinishTrack.trackMetaEvent === 'function') {
+      await FinishTrack.trackMetaEvent(this.config.tracking.metaCAPI.eventType, {
+        eventID: eventID,
+        email: emailField.value
+      });
+      
+      if (this.config.debug) {
+        console.log('📊 finish_track CAPI: Lead Event', eventID);
+      }
+    }
+  }
+  
+  // ============================================
+  // CORE FUNCTIONS
   // ============================================
   
   detectSubmissionMode() {
@@ -357,7 +506,6 @@ updateURL() {
     this.captureStepData();
     
     this.elements.steps.forEach((step) => {
-      // Skip if already hidden by A/B Test
       if (step.hasAttribute('data-ab-hidden')) {
         return;
       }
@@ -408,7 +556,6 @@ updateURL() {
     inputs.forEach(input => {
       if (!input.name) return;
       
-      // Skip if in hidden A/B variant
       const parentStep = input.closest('[data-form-step]');
       if (parentStep && parentStep.hasAttribute('data-ab-hidden')) {
         return;
@@ -436,26 +583,37 @@ updateURL() {
     this.captureStepData();
     this.updateVisibility();
     
-if (this.state.currentStep < this.visibleSteps.length - 1) {
-  this.state.currentStep++;
-  this.render();
-  this.updateURL(); // ← NEU
-  this.saveProgress();
-} else {
-  this.showSubmitButton();
-}
-
+    if (this.state.currentStep < this.visibleSteps.length - 1) {
+      this.state.currentStep++;
+      this.render();
+      this.updateURL();
+      this.trackStep();
+      this.saveProgress();
+    } else {
+      this.showSubmitButton();
+    }
   }
   
-prevStep() {
-  if (this.state.currentStep > 0) {
-    this.state.currentStep--;
-    this.render();
-    this.updateURL(); // ← NEU
-    this.saveProgress();
+  prevStep() {
+    if (this.state.currentStep > 0) {
+      const fromStepElement = this.visibleSteps[this.state.currentStep];
+      const fromStep = fromStepElement.getAttribute('data-step-id') 
+                    || fromStepElement.getAttribute('data-form-step');
+      
+      this.state.currentStep--;
+      
+      const toStepElement = this.visibleSteps[this.state.currentStep];
+      const toStep = toStepElement.getAttribute('data-step-id') 
+                  || toStepElement.getAttribute('data-form-step');
+      
+      this.trackBackButton(fromStep, toStep);
+      
+      this.render();
+      this.updateURL();
+      this.trackStep();
+      this.saveProgress();
+    }
   }
-}
-
   
   render() {
     this.elements.steps.forEach(step => {
@@ -491,78 +649,76 @@ prevStep() {
     }
   }
   
-setupAutoAdvance() {
-  const finishFlowInstance = this;
-  
-  const autoAdvanceSteps = this.form.querySelectorAll('[data-form-step][data-auto-advance="true"]');
-  
-  autoAdvanceSteps.forEach(step => {
-    const radios = step.querySelectorAll('input[type="radio"]');
+  setupAutoAdvance() {
+    const finishFlowInstance = this;
     
-    radios.forEach(radio => {
-      let wasChecked = false;
+    const autoAdvanceSteps = this.form.querySelectorAll('[data-form-step][data-auto-advance="true"]');
+    
+    autoAdvanceSteps.forEach(step => {
+      const radios = step.querySelectorAll('input[type="radio"]');
       
-      radio.addEventListener('mousedown', function() {
-        wasChecked = this.checked;
-      });
-      
-      radio.addEventListener('click', function() {
-        const allRadiosInGroup = finishFlowInstance.form.querySelectorAll(`input[name="${this.name}"]`);
-        allRadiosInGroup.forEach(r => {
-          const label = finishFlowInstance.findLabelForInput(r);
-          if (label) label.classList.remove('finish-flow-selected');
+      radios.forEach(radio => {
+        let wasChecked = false;
+        
+        radio.addEventListener('mousedown', function() {
+          wasChecked = this.checked;
         });
         
-        const currentLabel = finishFlowInstance.findLabelForInput(this);
-        if (currentLabel) currentLabel.classList.add('finish-flow-selected');
-        
-        setTimeout(() => {
-          finishFlowInstance.captureStepData();
-          finishFlowInstance.nextStep();
-        }, finishFlowInstance.config.autoAdvanceDelay);
+        radio.addEventListener('click', function() {
+          const allRadiosInGroup = finishFlowInstance.form.querySelectorAll(`input[name="${this.name}"]`);
+          allRadiosInGroup.forEach(r => {
+            const label = finishFlowInstance.findLabelForInput(r);
+            if (label) label.classList.remove('finish-flow-selected');
+          });
+          
+          const currentLabel = finishFlowInstance.findLabelForInput(this);
+          if (currentLabel) currentLabel.classList.add('finish-flow-selected');
+          
+          setTimeout(() => {
+            finishFlowInstance.captureStepData();
+            
+            // NEW v3.2: Track Auto-Advance
+            finishFlowInstance.trackAutoAdvance('radio', this.name, this.value);
+            
+            finishFlowInstance.nextStep();
+          }, finishFlowInstance.config.autoAdvanceDelay);
+        });
+      });
+      
+      const selects = step.querySelectorAll('select');
+      
+      selects.forEach(select => {
+        select.addEventListener('change', function() {
+          setTimeout(() => {
+            finishFlowInstance.captureStepData();
+            
+            // NEW v3.2: Track Auto-Advance
+            finishFlowInstance.trackAutoAdvance('select', this.name, this.value);
+            
+            finishFlowInstance.nextStep();
+          }, finishFlowInstance.config.autoAdvanceDelay);
+        });
       });
     });
-    
-    const selects = step.querySelectorAll('select');
-    
-    selects.forEach(select => {
-      select.addEventListener('change', function() {
-        setTimeout(() => {
-          finishFlowInstance.captureStepData();
-          finishFlowInstance.nextStep();
-        }, finishFlowInstance.config.autoAdvanceDelay);
-      });
-    });
-  });
-}
-
-
-
-
-  findLabelForInput(input) {
-  // 1) Input innerhalb von <label>
-  const parentLabel = input.closest('label');
-  if (parentLabel) return parentLabel;
-  
-  // 2) Label mit for="input-id"
-  if (input.id) {
-    const linkedLabel = this.form.querySelector(`label[for="${input.id}"]`);
-    if (linkedLabel) return linkedLabel;
   }
   
-  // 3) Label als nächstes Geschwisterelement
-  const nextLabel = input.nextElementSibling;
-  if (nextLabel && nextLabel.tagName === 'LABEL') return nextLabel;
-  
-  // 4) Webflow's .w-radio Wrapper
-  const parent = input.parentElement;
-  if (parent && parent.classList.contains('w-radio')) return parent;
-  
-  return parent;
-}
-
-
-
+  findLabelForInput(input) {
+    const parentLabel = input.closest('label');
+    if (parentLabel) return parentLabel;
+    
+    if (input.id) {
+      const linkedLabel = this.form.querySelector(`label[for="${input.id}"]`);
+      if (linkedLabel) return linkedLabel;
+    }
+    
+    const nextLabel = input.nextElementSibling;
+    if (nextLabel && nextLabel.tagName === 'LABEL') return nextLabel;
+    
+    const parent = input.parentElement;
+    if (parent && parent.classList.contains('w-radio')) return parent;
+    
+    return parent;
+  }
   
   addVisualFeedback(element) {
     const container = element.closest('label') || element.parentElement;
@@ -589,8 +745,7 @@ setupAutoAdvance() {
       step: this.state.currentStep,
       data: this.state.formData,
       timestamp: Date.now(),
-      version: '3.0.0',
-      // NEW V3: Save A/B variant
+      version: '3.2.0',
       abVariant: this.abTest.enabled ? this.abTest.variant : null
     };
     
@@ -618,8 +773,7 @@ setupAutoAdvance() {
       const progressData = JSON.parse(saved);
       const { stepAttr, step, data, timestamp, version, abVariant } = progressData;
       
-      // Version check (accept 2.0.0 and 3.0.0)
-      if (version && !['2.0.0', '3.0.0'].includes(version)) {
+      if (version && !['2.0.0', '3.0.0', '3.1.0', '3.2.0'].includes(version)) {
         console.warn('⚠️ Old version detected, clearing progress');
         this.clearProgress();
         return false;
@@ -644,7 +798,6 @@ setupAutoAdvance() {
         }
       }
       
-      // NEW V3: Check if saved A/B variant matches current
       if (this.abTest.enabled && abVariant && abVariant !== this.abTest.variant) {
         if (this.config.debug) {
           console.log('⚠️ A/B variant changed, clearing progress');
@@ -653,14 +806,11 @@ setupAutoAdvance() {
         return false;
       }
       
-      // Restore formData and fields
       this.state.formData = data;
       this.restoreFormFields();
       
-      // Update visibility with restored data
       this.updateVisibility();
       
-      // Find correct step
       if (stepAttr) {
         const targetStep = this.visibleSteps.find(s => 
           s.getAttribute('data-form-step') === stepAttr
@@ -689,7 +839,6 @@ setupAutoAdvance() {
       const fields = this.form.querySelectorAll(`[name="${name}"]`);
       
       fields.forEach(field => {
-        // Skip if in hidden A/B variant
         const parentStep = field.closest('[data-form-step]');
         if (parentStep && parentStep.hasAttribute('data-ab-hidden')) {
           return;
@@ -765,58 +914,45 @@ setupAutoAdvance() {
     return isValid;
   }
   
-updateProgressIndicators() {
-  const totalSteps = this.visibleSteps.length;
-  const currentStepNumber = this.state.currentStep + 1;
-  const progress = (currentStepNumber / totalSteps) * 100;
-  
-  // ===== SYSTEM 1: Standard Finish Flow (data-progress-bar) =====
-  if (this.elements.progressBar) {
-    this.elements.progressBar.style.width = progress + '%';
-  }
-  
-  // ===== SYSTEM 2: Custom Finish Flow (data-progress-bar-finish) =====
-  // ✅ NEU: Findet ALLE Progress Bars (auch die in versteckten Steps)
-  const allCustomProgressBars = document.querySelectorAll('[data-progress-bar-finish]');
-  
-  if (allCustomProgressBars.length > 0) {
-    allCustomProgressBars.forEach(bar => {
-      bar.style.width = progress + '%';
-      bar.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
-    });
+  updateProgressIndicators() {
+    const totalSteps = this.visibleSteps.length;
+    const currentStepNumber = this.state.currentStep + 1;
+    const progress = (currentStepNumber / totalSteps) * 100;
     
-    // Debug Log (optional)
-    if (this.config.debug) {
-      console.log(`📊 ${allCustomProgressBars.length} Progress Bars updated:`, progress + '%', `(${currentStepNumber}/${totalSteps})`);
+    if (this.elements.progressBar) {
+      this.elements.progressBar.style.width = progress + '%';
     }
-  }
-  
-  // ===== Step Indicator Text =====
-  if (this.elements.stepIndicator) {
-    this.elements.stepIndicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
-  }
-  
-  // ===== Step Indicator Text (alle Instanzen) =====
-  const allStepIndicators = document.querySelectorAll('[data-step-indicator]');
-  if (allStepIndicators.length > 0) {
-    allStepIndicators.forEach(indicator => {
-      indicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
+    
+    const allCustomProgressBars = document.querySelectorAll('[data-progress-bar-finish]');
+    
+    if (allCustomProgressBars.length > 0) {
+      allCustomProgressBars.forEach(bar => {
+        bar.style.width = progress + '%';
+        bar.style.transition = 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+      });
+    }
+    
+    if (this.elements.stepIndicator) {
+      this.elements.stepIndicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
+    }
+    
+    const allStepIndicators = document.querySelectorAll('[data-step-indicator]');
+    if (allStepIndicators.length > 0) {
+      allStepIndicators.forEach(indicator => {
+        indicator.textContent = `Schritt ${currentStepNumber} von ${totalSteps}`;
+      });
+    }
+    
+    this.elements.stepNumbers.forEach((num, index) => {
+      num.classList.remove('active', 'completed');
+      
+      if (index === this.state.currentStep) {
+        num.classList.add('active');
+      } else if (index < this.state.currentStep) {
+        num.classList.add('completed');
+      }
     });
   }
-  
-  // ===== Step Numbers (Dots/Circles) =====
-  this.elements.stepNumbers.forEach((num, index) => {
-    num.classList.remove('active', 'completed');
-    
-    if (index === this.state.currentStep) {
-      num.classList.add('active');
-    } else if (index < this.state.currentStep) {
-      num.classList.add('completed');
-    }
-  });
-}
-
-
   
   setupEventListeners() {
     this.elements.nextButtons.forEach(btn => {
@@ -861,6 +997,10 @@ updateProgressIndicators() {
     e.preventDefault();
     
     this.captureStepData();
+    
+    // NEW v3.2: Track Form Submit
+    this.trackFormSubmit();
+    
     this.clearProgress();
     
     if (this.submissionMode === 'webflow') {
@@ -946,28 +1086,29 @@ updateProgressIndicators() {
   // PUBLIC API
   // ============================================
   
-goToStep(stepNumber) {
-  if (stepNumber >= 0 && stepNumber < this.visibleSteps.length) {
-    this.state.currentStep = stepNumber;
-    this.render();
-    this.updateURL(); // ← NEU
-    this.saveProgress();
-  } else {
-    console.error('❌ Invalid step number:', stepNumber);
+  goToStep(stepNumber) {
+    if (stepNumber >= 0 && stepNumber < this.visibleSteps.length) {
+      this.state.currentStep = stepNumber;
+      this.render();
+      this.updateURL();
+      this.trackStep();
+      this.saveProgress();
+    } else {
+      console.error('❌ Invalid step number:', stepNumber);
+    }
   }
-}
-
   
-reset() {
-  this.state.currentStep = 0;
-  this.state.formData = {};
-  this.clearProgress();
-  this.form.reset();
-  this.updateVisibility();
-  this.render();
-  this.updateURL(); // ← NEU
-}
-
+  reset() {
+    this.state.currentStep = 0;
+    this.state.formData = {};
+    this.state.startTime = Date.now();
+    this.clearProgress();
+    this.form.reset();
+    this.updateVisibility();
+    this.render();
+    this.updateURL();
+    this.trackStep();
+  }
   
   getData() {
     this.captureStepData();
@@ -984,10 +1125,6 @@ reset() {
   destroy() {
     this.form.classList.remove('finish-flow-initialized');
   }
-  
-  // ============================================
-  // A/B TESTING HELPER FUNCTIONS (NEW V3)
-  // ============================================
   
   getVariant() {
     return this.abTest.enabled ? this.abTest.variant : null;
@@ -1006,20 +1143,16 @@ reset() {
       return false;
     }
     
-    // Update variant
     this.abTest.variant = upperVariant;
     this.saveVariant();
     
-    // Reapply variant (hide/show elements)
     this.applyVariant();
     this.updateVisibility();
     
-    // Reset to step 0 (fresh start with new variant)
     this.state.currentStep = 0;
     this.clearProgress();
     this.render();
     
-    // Update data attributes
     this.form.setAttribute('data-ab-variant', this.abTest.variant);
     document.body.setAttribute('data-ab-variant', this.abTest.variant);
     
@@ -1036,18 +1169,15 @@ reset() {
       return false;
     }
     
-    // Assign new variant
     this.abTest.variant = this.assignVariant();
     this.saveVariant();
     
-    // Reapply and reset
     this.applyVariant();
     this.updateVisibility();
     this.state.currentStep = 0;
     this.clearProgress();
     this.render();
     
-    // Update data attributes
     this.form.setAttribute('data-ab-variant', this.abTest.variant);
     document.body.setAttribute('data-ab-variant', this.abTest.variant);
     
@@ -1060,23 +1190,20 @@ reset() {
 }
 
 // ============================================
-// GLOBAL HELPER FUNCTIONS (NEW V3)
+// GLOBAL HELPER FUNCTIONS
 // ============================================
 
 window.FinishFlow = FinishFlow;
 
-// Global helper to get variant for a specific test
 window.FinishFlow.getVariant = function(testName) {
   const key = `ab_${testName}`;
   
-  // Try cookie
   const cookies = document.cookie.split('; ');
   const cookie = cookies.find(row => row.startsWith(key + '='));
   if (cookie) {
     return cookie.split('=')[1];
   }
   
-  // Try localStorage
   try {
     return localStorage.getItem(key);
   } catch (e) {
@@ -1084,19 +1211,16 @@ window.FinishFlow.getVariant = function(testName) {
   }
 };
 
-// Global helper to set variant for a specific test
 window.FinishFlow.setVariant = function(testName, variant) {
   const key = `ab_${testName}`;
   const value = variant.toUpperCase();
   
-  // Set cookie
   try {
     document.cookie = `${key}=${value}; max-age=${30*24*60*60}; path=/; SameSite=Lax`;
   } catch (e) {
     console.warn('⚠️ Could not set cookie:', e);
   }
   
-  // Set localStorage
   try {
     localStorage.setItem(key, value);
   } catch (e) {
@@ -1106,18 +1230,15 @@ window.FinishFlow.setVariant = function(testName, variant) {
   console.log(`✅ Variant set: ${testName} = ${value} (reload page to apply)`);
 };
 
-// Global helper to reset variant (re-roll)
 window.FinishFlow.resetVariant = function(testName) {
   const key = `ab_${testName}`;
   
-  // Delete cookie
   try {
     document.cookie = `${key}=; max-age=0; path=/`;
   } catch (e) {
     console.warn('⚠️ Could not delete cookie:', e);
   }
   
-  // Delete localStorage
   try {
     localStorage.removeItem(key);
   } catch (e) {
@@ -1142,5 +1263,5 @@ document.addEventListener('DOMContentLoaded', function() {
     new FinishFlow('#' + form.id);
   });
   
-  console.log('✅');
+  console.log('✅ Finish Flow v3.2.0');
 });
