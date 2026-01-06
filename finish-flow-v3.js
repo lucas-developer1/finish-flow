@@ -38,11 +38,6 @@ class FinishFlow {
         trackAutoAdvance: true,
         trackBackButton: true,
         trackFormSubmit: true,
-        metaCAPI: {
-          enabled: false,
-          eventType: 'lead',
-          triggerOnStep: null // Step number (1-based) where email is captured
-        }
       },
       
       ...options
@@ -364,12 +359,7 @@ class FinishFlow {
         stepId: stepId
       });
     }
-    
-    // Meta CAPI Lead Event (if email step reached)
-    if (this.config.tracking.metaCAPI?.enabled && 
-        this.config.tracking.metaCAPI.triggerOnStep === this.state.currentStep + 1) {
-      this.trackMetaLeadEvent();
-    }
+  
   }
   
   trackABTest() {
@@ -455,23 +445,7 @@ class FinishFlow {
     }
   }
   
-  async trackMetaLeadEvent() {
-    if (!this.config.tracking.metaCAPI?.enabled) return;
-    
-    const emailField = this.form.querySelector('input[type="email"]');
-    if (!emailField || !emailField.value) return;
-    
-    const eventID = crypto.randomUUID();
-    
-    // Meta Pixel (falls vorhanden)
-    if (typeof fbq !== 'undefined') {
-      fbq('track', 'Lead', {}, {eventID: eventID});
-      
-      if (this.config.debug) {
-        console.log('📊 Meta Pixel: Lead Event', eventID);
-      }
-    }
-    
+
     // finish_track CAPI
     if (typeof FinishTrack !== 'undefined' && typeof FinishTrack.trackMetaEvent === 'function') {
       await FinishTrack.trackMetaEvent(this.config.tracking.metaCAPI.eventType, {
