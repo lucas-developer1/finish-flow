@@ -908,31 +908,50 @@ class FinishFlow {
     });
   }
   
-  async handleSubmit(e) {
-    e.preventDefault();
+async handleSubmit(e) {
+  // Prüfen ob wir am letzten Step sind
+  const isLastStep = this.state.currentStep === this.visibleSteps.length - 1;
+  
+  // NUR am letzten Step UND Webflow-Mode → Submit durchlassen
+  if (isLastStep && this.submissionMode === 'webflow') {
+    console.log('✅ Finish Flow: Letzter Step → Webflow Submit durchgelassen');
     
+    // Daten erfassen
     this.captureStepData();
+    
+    // finish_track Event senden
     this.trackFormSubmit();
+    
+    // Progress löschen
     this.clearProgress();
     
-    if (this.submissionMode === 'webflow') {
-      this.form.submit();
+    // KEIN e.preventDefault() → Webflow übernimmt den Submit!
+    return;
+  }
+  
+  // AB HIER: Alle anderen Fälle (Webhook, Custom, nicht letzter Step)
+  e.preventDefault();
+  
+  this.captureStepData();
+  this.trackFormSubmit();
+  this.clearProgress();
+  
+  if (this.submissionMode === 'webhook' || this.submissionMode === 'custom') {
+    try {
+      const result = await this.customSubmit();
       
-    } else if (this.submissionMode === 'webhook' || this.submissionMode === 'custom') {
-      try {
-        const result = await this.customSubmit();
-        
-        if (result.success) {
-          this.showSuccess();
-        } else {
-          this.showError(result.message);
-        }
-      } catch (error) {
-        console.error('❌ Submission failed:', error);
-        this.showError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
+      if (result.success) {
+        this.showSuccess();
+      } else {
+        this.showError(result.message);
       }
+    } catch (error) {
+      console.error('❌ Submission failed:', error);
+      this.showError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.');
     }
   }
+}
+
   
   async customSubmit() {
     const webhookUrl = this.form.getAttribute('data-webhook-url');
